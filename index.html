@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Matchmate Creator CRM</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./config.js"></script>
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Matchmate Growth</div>
+        <h1>Creator CRM</h1>
+      </div>
+      <div class="top-actions">
+        <span id="status" class="status-pill">Loading</span>
+        <button id="refreshBtn" class="secondary" type="button">Refresh</button>
+        <button id="exportBtn" class="secondary" type="button">Export Filtered CSV</button>
+        <button id="exportAllBtn" class="secondary" type="button">Export All CSV</button>
+        <label class="file-button">Import CSV<input id="importInput" type="file" accept=".csv,text/csv"></label>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <section class="panel">
+          <h2>Workflow View</h2>
+          <p class="muted">Use queues for outreach and fulfillment handoff.</p>
+          <div id="workflow"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Pipeline Snapshot</h2>
+          <div id="metrics" class="metrics"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Filters</h2>
+          <label>Search<input id="searchInput" type="search" placeholder="handle, product, address, tracking"></label>
+          <label>Stage<select id="stageFilter"></select></label>
+          <label>Tier<select id="tierFilter"></select></label>
+          <label>Account type<select id="accountTypeFilter"></select></label>
+          <label>Appearance<select id="appearanceFilter"></select></label>
+          <label>Source<select id="sourceFilter"></select></label>
+          <label>Product<select id="productFilter"></select></label>
+          <label class="checkline"><input id="excludeNoReply" type="checkbox"> Exclude no reply x2</label>
+          <button id="resetViewBtn" class="secondary full" type="button">Reset View</button>
+        </section>
+
+        <section class="panel">
+          <h2>Bulk Actions</h2>
+          <p id="bulkScope" class="muted">Applies to filtered creators.</p>
+          <div class="row">
+            <button id="selectFilteredBtn" class="secondary" type="button">Select Shown</button>
+            <button id="invertFilteredBtn" class="secondary" type="button">Invert</button>
+            <button id="clearSelectedBtn" class="secondary" type="button">Clear</button>
+          </div>
+          <label>Stage<select id="bulkStage"></select></label>
+          <label>Product direction<select id="bulkProductDirection"></select></label>
+          <label>Reason / Blocker<select id="bulkReason"></select></label>
+          <label>Rights<select id="bulkRights"></select></label>
+          <button id="bulkApplyBtn" type="button">Apply</button>
+        </section>
+
+        <section class="panel">
+          <h2>Product Mix</h2>
+          <div id="productStats"></div>
+        </section>
+
+        <section class="panel subtle">
+          <h2>Sourcing Rules</h2>
+          <p><strong>Primary fit:</strong> US-based, 200-10k followers, clean visuals, owner appears often, prior brand collaboration.</p>
+          <p><strong>Best accounts:</strong> human + pet, young lifestyle, fashion/beauty, city or polished suburban settings.</p>
+          <p><strong>Avoid:</strong> broken/private links, dog-only feeds, rural/outdoor-heavy content, weak owner style, non-US accounts.</p>
+        </section>
+      </aside>
+
+      <section class="list-panel">
+        <div class="section-head">
+          <div>
+            <h2>Creators</h2>
+            <p id="listCount" class="muted"></p>
+          </div>
+          <button id="addBtn" type="button">Add</button>
+        </div>
+        <div id="creatorList" class="creator-list"></div>
+      </section>
+
+      <section class="detail-panel">
+        <div class="section-head">
+          <div>
+            <div class="eyebrow">Selected Creator</div>
+            <h2 id="detailTitle">Select a creator</h2>
+          </div>
+          <div class="top-actions">
+            <a id="profileLink" class="button-link secondary" target="_blank" rel="noreferrer">Open IG</a>
+            <button id="editBtn" class="secondary" type="button">Edit</button>
+            <button id="saveBtn" type="button">Save</button>
+            <button id="deleteBtn" class="danger" type="button">Delete</button>
+          </div>
+        </div>
+
+        <form id="creatorForm" class="hidden">
+          <nav class="tabs">
+            <button class="tab-button active" data-tab="workflow" type="button">Workflow</button>
+            <button class="tab-button" data-tab="profile" type="button">Profile</button>
+            <button class="tab-button" data-tab="history" type="button">History</button>
+          </nav>
+
+          <div class="detail-body">
+            <section id="tab-workflow" class="tab-panel active">
+              <div class="quick-actions">
+                <button type="button" data-action="DM sent">DM Sent</button>
+                <button type="button" data-action="Follow-up">Follow-up</button>
+                <button type="button" data-action="Address">Address</button>
+                <button type="button" data-action="Shipped">Shipped</button>
+                <button type="button" data-action="Delivered">Delivered</button>
+                <button type="button" data-action="Posted">Posted</button>
+              </div>
+
+              <div class="grid three">
+                <label>Stage<select name="stage"></select></label>
+                <label>Product Direction<select name="product_direction"></select></label>
+                <label>Reason / Blocker<select name="reason_blocker"></select></label>
+                <label>Rights Status<select name="rights_status"></select></label>
+                <label>Payment Status<select name="payment_status"></select></label>
+                <label>Contract Status<select name="contract_status"></select></label>
+                <label>Rate Type<select name="rate_type"></select></label>
+                <label>Next Action<input name="next_action"></label>
+              </div>
+
+              <div class="box">
+                <h3>Shipping Fulfillment</h3>
+                <p class="muted">Final product and full address are the handoff fields for shipping.</p>
+                <div class="grid two">
+                  <label>Final Product<select name="final_product"></select></label>
+                  <label>Tracking Number<input name="tracking_number"></label>
+                  <label>Shipping Address<textarea name="shipping_address" rows="5" placeholder="Paste full address"></textarea></label>
+                  <label>Pet Details<textarea name="pet_details" rows="5" placeholder="Pet name, breed, neck size, fit notes"></textarea></label>
+                </div>
+              </div>
+            </section>
+
+            <section id="tab-profile" class="tab-panel">
+              <div class="grid three">
+                <label>Handle<input name="handle"></label>
+                <label>Profile URL<input name="profile_url"></label>
+                <label>Tier<select name="tier"></select></label>
+                <label>Account Type<select name="account_type"></select></label>
+                <label>Appearance<select name="appearance"></select></label>
+                <label>Fit Verdict<select name="fit_verdict"></select></label>
+                <label>Source Group<select name="source_group"></select></label>
+                <label>Source Detail<input name="source_detail"></label>
+                <label>Followers<input name="followers"></label>
+                <label>Location<input name="location"></label>
+                <label>Link Status<select name="link_status"></select></label>
+                <label>Contact Email<input name="contact_email"></label>
+                <label>Phone<input name="phone"></label>
+              </div>
+              <label>Notes<textarea name="notes" rows="4"></textarea></label>
+              <label>Database Notes<textarea name="database_notes" rows="4"></textarea></label>
+              <label>DM Notes<textarea name="dm_notes" rows="4"></textarea></label>
+              <label>Last Message<textarea name="last_message" rows="3"></textarea></label>
+            </section>
+
+            <section id="tab-history" class="tab-panel">
+              <div class="grid three">
+                <label>Last Touch<input name="last_touch" type="date"></label>
+                <label>Next Follow<input name="next_follow" type="date"></label>
+                <label>Conversation Link<input name="conversation_link"></label>
+                <label>Content URL<input name="content_url"></label>
+                <label>Posted Date<input name="posted_date" type="date"></label>
+                <label>Contract URL<input name="contract_url"></label>
+                <label>Signed Date<input name="signed_date" type="date"></label>
+                <label>Quoted Rate<input name="quoted_rate"></label>
+                <label>Approved Budget<input name="approved_budget"></label>
+                <label>Payment Method<input name="payment_method"></label>
+                <label>Paid Date<input name="paid_date" type="date"></label>
+                <label>Collaboration Count<input name="collab_count" type="number" min="0"></label>
+                <label>Last Collaboration Date<input name="last_collab_date" type="date"></label>
+                <label>Performance Note<input name="performance_note"></label>
+              </div>
+              <label>Collaboration History<textarea name="collab_history" rows="7" placeholder="Keep date and URL on the same line."></textarea></label>
+            </section>
+          </div>
+        </form>
+
+        <div id="emptyState" class="empty">Select a creator to review, message, ship, or track content.</div>
+      </section>
+    </main>
+  </body>
+</html>
