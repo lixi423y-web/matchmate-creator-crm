@@ -6,7 +6,7 @@
     <title>Matchmate Creator CRM</title>
     <link rel="stylesheet" href="./styles.css">
     <script src="./config.js"></script>
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=20260709-2"></script>
   </head>
   <body>
     <header class="topbar">
@@ -112,6 +112,7 @@
           <div class="detail-body">
             <section id="tab-workflow" class="tab-panel active">
               <div class="quick-actions">
+                <span class="quick-label">Quick Actions</span>
                 <button type="button" data-action="DM sent">DM Sent</button>
                 <button type="button" data-action="Follow-up">Follow-up</button>
                 <button type="button" data-action="Address">Address</button>
@@ -120,23 +121,36 @@
                 <button type="button" data-action="Posted">Posted</button>
               </div>
 
-              <div class="grid three">
-                <label>Stage<select name="stage"></select></label>
-                <label>Product Direction<select name="product_direction"></select></label>
-                <label>Reason / Blocker<select name="reason_blocker"></select></label>
-                <label>Rights Status<select name="rights_status"></select></label>
-                <label>Payment Status<select name="payment_status"></select></label>
-                <label>Contract Status<select name="contract_status"></select></label>
-                <label>Rate Type<select name="rate_type"></select></label>
-                <label>Next Action<input name="next_action"></label>
+              <div class="box compact">
+                <div class="box-head">
+                  <div>
+                    <h3>Collaboration Status</h3>
+                    <p class="muted">Use Stage for pipeline movement, and Reason / Blocker for attribution.</p>
+                  </div>
+                </div>
+                <div class="grid three">
+                  <label>Stage<select name="stage"></select></label>
+                  <label>Product Direction<select name="product_direction"></select></label>
+                  <label>Reason / Blocker<select name="reason_blocker"></select></label>
+                  <label>Rights Status<select name="rights_status"></select></label>
+                  <label>Payment Status<select name="payment_status"></select></label>
+                  <label>Contract Status<select name="contract_status"></select></label>
+                  <label>Rate Type<select name="rate_type"></select></label>
+                  <label class="wide-field">Next Action<input name="next_action"></label>
+                </div>
               </div>
 
-              <div class="box">
-                <h3>Shipping Fulfillment</h3>
-                <p class="muted">Final product and full address are the handoff fields for shipping.</p>
-                <div class="grid two">
-                  <label>Final Product<select name="final_product"></select></label>
-                  <label>Tracking Number<input name="tracking_number"></label>
+              <div class="box hero-box">
+                <div class="box-head">
+                  <div>
+                    <h3>Shipping Fulfillment</h3>
+                    <p class="muted">Final product, full address, pet details, and tracking stay together for handoff.</p>
+                  </div>
+                  <button id="newRoundBtn" class="secondary" type="button">Start New Round</button>
+                </div>
+                <div class="grid two fulfillment-grid">
+                  <label class="wide-field">Final Product<input name="final_product" type="hidden"><div id="finalProductChoices" class="multi-choice"></div></label>
+                  <label class="wide-field">Tracking Number<input name="tracking_number"></label>
                   <label>Shipping Address<textarea name="shipping_address" rows="5" placeholder="Paste full address"></textarea></label>
                   <label>Pet Details<textarea name="pet_details" rows="5" placeholder="Pet name, breed, neck size, fit notes"></textarea></label>
                 </div>
@@ -166,6 +180,15 @@
             </section>
 
             <section id="tab-history" class="tab-panel">
+              <div class="box hero-box">
+                <div class="box-head">
+                  <div>
+                    <h3>Repeat Collaboration</h3>
+                    <p class="muted">Every new round archives the previous shipment/content line below before resetting current fulfillment fields.</p>
+                  </div>
+                </div>
+                <label>Collaboration History<textarea name="collab_history" rows="8" placeholder="Keep date, products, URL, and tracking on the same line."></textarea></label>
+              </div>
               <div class="grid three">
                 <label>Last Touch<input name="last_touch" type="date"></label>
                 <label>Next Follow<input name="next_follow" type="date"></label>
@@ -182,7 +205,6 @@
                 <label>Last Collaboration Date<input name="last_collab_date" type="date"></label>
                 <label>Performance Note<input name="performance_note"></label>
               </div>
-              <label>Collaboration History<textarea name="collab_history" rows="7" placeholder="Keep date and URL on the same line."></textarea></label>
             </section>
           </div>
         </form>

@@ -63,6 +63,7 @@ function bindEvents() {
   $('#clearSelectedBtn').addEventListener('click', () => { state.selectedIds.clear(); render(); });
   $('#bulkApplyBtn').addEventListener('click', bulkApply);
   $('#resetViewBtn').addEventListener('click', resetView);
+  $('#newRoundBtn').addEventListener('click', startNewRound);
   ['searchInput','stageFilter','tierFilter','accountTypeFilter','appearanceFilter','sourceFilter','productFilter','excludeNoReply']
     .forEach(id => $('#' + id).addEventListener('input', render));
   document.querySelectorAll('.tab-button').forEach(button => button.addEventListener('click', () => {
@@ -197,7 +198,7 @@ function fillStaticOptions() {
   fillFormSelect('payment_status', OPTIONS.payments);
   fillFormSelect('contract_status', OPTIONS.contracts);
   fillFormSelect('rate_type', OPTIONS.rates);
-  fillFormSelect('final_product', OPTIONS.finalProducts);
+  renderFinalProductChoices('');
   fillFormSelect('tier', OPTIONS.tiers);
   fillFormSelect('account_type', OPTIONS.accountTypes);
   fillFormSelect('appearance', OPTIONS.appearances);
@@ -234,15 +235,16 @@ function render() {
 function renderWorkflow() {
   const items = [
     ['all', 'All creators'],
-    ['dm', 'Outreach Queue'],
-    ['contacted', "DM'd"],
+    ['dm', 'Not Contacted'],
+    ['contacted', 'DM / Follow-up'],
+    ['replied', 'Replied'],
     ['ship', 'Ready to ship'],
     ['shipped', 'Shipped'],
     ['delivered', 'Delivered'],
     ['posted', 'Posted']
   ];
   $('#workflow').innerHTML = items.map(([key, label]) => {
-    const count = key === 'contacted' ? dmCount() : state.creators.filter(c => workflowMatch(c, key)).length;
+    const count = state.creators.filter(c => workflowMatch(c, key)).length;
     return `<button type="button" class="workflow-button ${state.workflow === key ? 'active' : ''}" data-workflow="${key}"><span>${label}</span><strong>${count}</strong></button>`;
   }).join('');
   document.querySelectorAll('.workflow-button').forEach(button => button.addEventListener('click', () => {
@@ -253,13 +255,19 @@ function renderWorkflow() {
 
 function workflowMatch(c, workflow) {
   if (workflow === 'all') return true;
-  if (workflow === 'dm') return ['Not contacted','DM sent','Follow-up sent','No reply after 2 follow-ups','Replied','Negotiating'].includes(c.stage);
-  if (workflow === 'contacted') return dmStages().includes(c.stage);
-  if (workflow === 'ship') return c.stage === 'Address received';
-  if (workflow === 'shipped') return c.stage === 'Shipped';
-  if (workflow === 'delivered') return c.stage === 'Delivered';
-  if (workflow === 'posted') return c.stage === 'Posted';
-  return true;
+  return workflowBucket(c) === workflow;
+}
+
+function workflowBucket(c) {
+  const stage = c.stage || '';
+  if (stage === 'Not contacted') return 'dm';
+  if (['DM sent','Follow-up sent','No reply after 2 follow-ups'].includes(stage)) return 'contacted';
+  if (['Replied','Negotiating'].includes(stage)) return 'replied';
+  if (stage === 'Address received') return 'ship';
+  if (stage === 'Shipped') return 'shipped';
+  if (stage === 'Delivered') return 'delivered';
+  if (stage === 'Posted') return 'posted';
+  return '';
 }
 
 function filteredCreators() {
@@ -285,7 +293,7 @@ function filteredCreators() {
       && (!accountType || c.account_type === accountType)
       && (!appearance || c.appearance === appearance)
       && (!source || c.source_group === source)
-      && (!product || productLabel === product)
+      && (!product || productList(c.final_product).includes(product))
       && (!excludeNoReply || (c.stage !== 'No reply after 2 follow-ups' && c.reason_blocker !== 'No reply after 2 follow-ups'));
   });
 }
@@ -310,7 +318,7 @@ function unique(field) {
 }
 
 function uniqueProducts() {
-  return [...new Set(state.creators.map(c => c.final_product).filter(Boolean))].sort();
+  return [...new Set(state.creators.flatMap(c => productList(c.final_product)).filter(Boolean))].sort();
 }
 
 function renderList() {
@@ -379,6 +387,7 @@ function renderDetail() {
   FIELDS.forEach(field => {
     if (form.elements[field]) form.elements[field].value = creator[field] || '';
   });
+  renderFinalProductChoices(creator.final_product || '');
 }
 
 function renderTabs() {
@@ -417,8 +426,9 @@ function renderProductStats() {
   const counts = {};
   state.creators.forEach(c => {
     if (!['Address received','Shipped','Delivered','Posted'].includes(c.stage)) return;
-    const product = c.final_product;
-    if (product) counts[product] = (counts[product] || 0) + 1;
+    productList(c.final_product).forEach(product => {
+      counts[product] = (counts[product] || 0) + 1;
+    });
   });
   const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 14);
   $('#productStats').innerHTML = rows.length
@@ -552,6 +562,7 @@ function quickAction(action) {
   FIELDS.forEach(field => {
     if (form.elements[field]) form.elements[field].value = current[field] || '';
   });
+  renderFinalProductChoices(current.final_product || '');
   saveCurrent(action);
 }
 
@@ -888,6 +899,97 @@ function parseCsv(text) {
 
 function finalProduct(c) {
   return c.final_product || c.product_direction || '';
+}
+
+function productList(value) {
+  return String(value || '').split(/\s*[;|]\s*/).map(item => item.trim()).filter(Boolean);
+}
+
+function setFinalProduct(value) {
+  const input = form.elements.final_product;
+  if (input) input.value = productList(value).join('; ');
+}
+
+function renderFinalProductChoices(value) {
+  const container = $('#finalProductChoices');
+  if (!container) return;
+  const selected = new Set(productList(value));
+  setFinalProduct(value);
+  const groups = productGroups();
+  container.innerHTML = Object.entries(groups).map(([group, products]) => `
+    <div class="choice-group">
+      <div class="choice-group-title">${escapeHtml(group)}</div>
+      <div class="choice-group-items">
+        ${products.map(product => `
+          <label class="choice-pill">
+            <input type="checkbox" value="${escapeHtml(product)}" ${selected.has(product) ? 'checked' : ''}>
+            <span>${escapeHtml(product)}</span>
+          </label>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+  container.querySelectorAll('input').forEach(input => input.addEventListener('change', () => {
+    const values = [...container.querySelectorAll('input:checked')].map(box => box.value);
+    setFinalProduct(values.join('; '));
+    scheduleAutoSave(150);
+    renderProductStats();
+  }));
+}
+
+function productGroups() {
+  const groups = {
+    Sets: [],
+    Scrunchies: [],
+    Bandanas: [],
+    Necklaces: []
+  };
+  OPTIONS.finalProducts.filter(Boolean).forEach(product => {
+    if (product.includes('Set')) groups.Sets.push(product);
+    else if (product.includes('Scrunchie')) groups.Scrunchies.push(product);
+    else if (product.includes('Bandana')) groups.Bandanas.push(product);
+    else if (product.includes('Necklace')) groups.Necklaces.push(product);
+    else groups.Sets.push(product);
+  });
+  return groups;
+}
+
+function startNewRound() {
+  const current = creatorFromForm();
+  const products = finalProduct(current);
+  const hasCurrent = products || current.tracking_number || current.content_url || current.posted_date;
+  if (!hasCurrent) return showNotice('No current shipment or content to archive yet.');
+  const today = new Date().toISOString().slice(0, 10);
+  const line = [
+    current.posted_date || current.last_collab_date || today,
+    products ? `Products: ${products}` : '',
+    current.content_url ? `Content: ${current.content_url}` : '',
+    current.tracking_number ? `Tracking: ${current.tracking_number}` : ''
+  ].filter(Boolean).join(' | ');
+  const confirmed = confirm([
+    `Start a new round for @${current.handle}?`,
+    '',
+    'This will archive:',
+    line,
+    '',
+    'Then it will clear current Final Product, Tracking Number, Content URL, and Posted Date.'
+  ].join('\n'));
+  if (!confirmed) return;
+  current.collab_history = [line, current.collab_history].filter(Boolean).join('\n');
+  current.collab_count = Number(current.collab_count || 0) + 1;
+  current.last_collab_date = current.posted_date || current.last_collab_date || today;
+  current.stage = 'Replied';
+  current.product_direction = 'Both Sets';
+  current.final_product = '';
+  current.tracking_number = '';
+  current.content_url = '';
+  current.posted_date = '';
+  current.next_action = 'Choose new product for repeat collaboration';
+  FIELDS.forEach(field => {
+    if (form.elements[field]) form.elements[field].value = current[field] || '';
+  });
+  renderFinalProductChoices('');
+  saveCurrent('New round started');
 }
 
 function nextHint(c) {
