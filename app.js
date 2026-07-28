@@ -40,6 +40,7 @@ const state = {
   activeTab: 'profile',
   roundPage: 'overview',
   roundsByCreator: new Map(),
+  selectedRoundByCreator: new Map(),
   roundProductsByCreator: new Map(),
   selectedRoundId: '',
   roundsLoading: new Set(),
@@ -462,7 +463,7 @@ function renderList() {
       </div>
       <p class="muted">${escapeHtml([c.account_type, c.appearance, c.location].filter(Boolean).join(' · '))}</p>
     `;
-    card.addEventListener('click', () => { state.selectedId = c.id; render(); });
+    card.addEventListener('click', () => selectCreator(c.id));
     card.querySelector('.select-box').addEventListener('click', event => {
       event.stopPropagation();
       toggleSelection(c.id);
@@ -506,7 +507,26 @@ function renderDetail() {
   FIELDS.forEach(field => {
     if (form.elements[field]) form.elements[field].value = creator[field] || '';
   });
+  const cachedRounds = state.roundsByCreator.get(creator.id);
+  state.selectedRoundId = state.selectedRoundByCreator.get(creator.id)
+    || cachedRounds?.find(round => round.is_current)?.id
+    || cachedRounds?.[0]?.id
+    || '';
+  if (!cachedRounds) clearRoundDetail('Loading collaboration...');
   loadRounds(creator.id);
+}
+
+function selectCreator(id) {
+  if (!id || id === state.selectedId) return;
+  clearTimeout(state.autoSaveTimer);
+  clearTimeout(state.roundSaveTimer);
+  state.selectedId = id;
+  const rounds = state.roundsByCreator.get(id) || [];
+  state.selectedRoundId = state.selectedRoundByCreator.get(id)
+    || rounds.find(round => round.is_current)?.id
+    || rounds[0]?.id
+    || '';
+  render();
 }
 
 function renderTabs() {
@@ -553,6 +573,7 @@ function renderRoundHistory() {
   }).join('');
   container.querySelectorAll('.open-history-round').forEach(button => button.addEventListener('click', () => {
     state.selectedRoundId = button.dataset.roundId;
+    state.selectedRoundByCreator.set(state.selectedId, state.selectedRoundId);
     state.activeTab = 'collaborations';
     renderTabs();
     renderRounds();
@@ -605,8 +626,15 @@ async function loadRounds(creatorId, force = false) {
     }
     if (!rows.length) rows = [legacyRound(creator)];
     state.roundsByCreator.set(creatorId, rows);
-    if (!rows.some(round => round.id === state.selectedRoundId)) state.selectedRoundId = rows[0].id;
-    renderRounds();
+    const rememberedId = state.selectedRoundByCreator.get(creatorId);
+    const nextRoundId = rows.some(round => round.id === rememberedId)
+      ? rememberedId
+      : (rows.find(round => round.is_current)?.id || rows[0].id);
+    state.selectedRoundByCreator.set(creatorId, nextRoundId);
+    if (state.selectedId === creatorId) {
+      state.selectedRoundId = nextRoundId;
+      renderRounds();
+    }
   } finally {
     state.roundsLoading.delete(creatorId);
   }
@@ -616,6 +644,17 @@ function renderRounds() {
   const rounds = state.roundsByCreator.get(state.selectedId) || [];
   const list = $('#roundList');
   if (!list) return;
+  if (!rounds.length) {
+    list.innerHTML = '';
+    clearRoundDetail(state.roundsLoading.has(state.selectedId) ? 'Loading collaboration...' : 'No collaboration yet');
+    renderRoundHistory();
+    return;
+  }
+  if (!rounds.some(round => round.id === state.selectedRoundId)) {
+    state.selectedRoundId = state.selectedRoundByCreator.get(state.selectedId)
+      || rounds.find(round => round.is_current)?.id
+      || rounds[0].id;
+  }
   list.innerHTML = rounds.map(round => {
     const links = normalizePostLinks(round.post_links);
     const status = round.stage || 'Not contacted';
@@ -626,6 +665,7 @@ function renderRounds() {
   list.value = state.selectedRoundId || '';
   list.onchange = () => {
     state.selectedRoundId = list.value;
+    state.selectedRoundByCreator.set(state.selectedId, state.selectedRoundId);
     renderRounds();
   };
   renderRoundDetail();
@@ -634,7 +674,7 @@ function renderRounds() {
 
 function renderRoundDetail() {
   const round = selectedRound();
-  if (!round) return;
+  if (!round) return clearRoundDetail('No collaboration selected');
   $('#roundEyebrow').textContent = round.is_current ? 'Current Collaboration' : 'Past Collaboration';
   $('#roundTitle').textContent = `Round ${round.round_number || 1}`;
   $('#roundStatus').textContent = round.stage || 'Not contacted';
@@ -653,6 +693,23 @@ function renderRoundDetail() {
   renderFinalProductChoices(round.final_product || '');
   renderPostLinks();
   loadAssets(round.id);
+}
+
+function clearRoundDetail(message = 'Loading collaboration...') {
+  $('#roundEyebrow').textContent = message;
+  $('#roundTitle').textContent = '';
+  $('#roundStatus').textContent = '';
+  ['roundStage','roundProductDirection','roundReason','roundRights','roundPayment','roundContract','roundRateType']
+    .forEach(id => { const element = $('#' + id); if (element) element.value = ''; });
+  ['roundNextAction','roundTracking','roundAddress','roundPetDetails','roundPerformance']
+    .forEach(id => { const element = $('#' + id); if (element) element.value = ''; });
+  renderFinalProductChoices('');
+  const postList = $('#postLinksList');
+  if (postList) postList.innerHTML = '<div class="compact-empty">Loading this creator’s collaboration details...</div>';
+  const assetList = $('#assetList');
+  if (assetList) assetList.innerHTML = '<div class="compact-empty">Loading this creator’s content sources...</div>';
+  const assetCount = $('#assetCount');
+  if (assetCount) assetCount.textContent = '0 items';
 }
 
 function roundFromForm() {
@@ -731,6 +788,7 @@ function assetCacheKey(roundId) {
 
 async function loadAssets(roundId, force = false) {
   const key = assetCacheKey(roundId);
+  const requestedCreatorId = state.selectedId;
   if (!key || state.assetsLoading.has(key)) return;
   if (!force && state.assetsByRound.has(key)) return renderAssets();
   if (!isConfigured()) {
@@ -747,8 +805,10 @@ async function loadAssets(roundId, force = false) {
       rows = await api(`creator_assets?round_id=eq.${encodeURIComponent(roundId)}&select=*&order=created_at.desc`);
     }
     state.assetsByRound.set(key, rows || []);
-    renderAssets();
-    setAssetStatus('');
+    if (state.selectedId === requestedCreatorId && state.selectedRoundId === roundId) {
+      renderAssets();
+      setAssetStatus('');
+    }
   } catch (error) {
     setAssetStatus(`Asset load error: ${friendlyError(error)}`);
   } finally {
@@ -986,13 +1046,14 @@ async function saveRound(round) {
     creator.id,
     [...new Set(rounds.flatMap(item => productList(item.final_product)))]
   );
-  state.selectedRoundId = saved.id;
+  state.selectedRoundByCreator.set(creator.id, saved.id);
+  if (state.selectedId === creator.id) state.selectedRoundId = saved.id;
   if (state.assetsByRound.has(oldId) && oldId !== saved.id) {
     state.assetsByRound.set(saved.id, state.assetsByRound.get(oldId));
     state.assetsByRound.delete(oldId);
   }
   await syncCreatorFromRound(saved);
-  renderRounds();
+  if (state.selectedId === creator.id) renderRounds();
   return saved;
 }
 
@@ -1113,7 +1174,16 @@ function selectedCreator() {
 
 function editCreator(id) {
   if (!id) return;
-  state.selectedId = id;
+  if (state.selectedId !== id) {
+    clearTimeout(state.autoSaveTimer);
+    clearTimeout(state.roundSaveTimer);
+    state.selectedId = id;
+    const rounds = state.roundsByCreator.get(id) || [];
+    state.selectedRoundId = state.selectedRoundByCreator.get(id)
+      || rounds.find(round => round.is_current)?.id
+      || rounds[0]?.id
+      || '';
+  }
   state.activeTab = 'profile';
   render();
   requestAnimationFrame(() => {
@@ -1691,6 +1761,7 @@ async function startNewRound() {
       .sort((a, b) => Number(b.round_number) - Number(a.round_number));
     state.roundsByCreator.set(creator.id, updatedRounds);
     state.selectedRoundId = nextRound.id;
+    state.selectedRoundByCreator.set(creator.id, nextRound.id);
     await syncCreatorFromRound(nextRound);
     renderRounds();
     setStatus('New round ready');
