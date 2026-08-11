@@ -42,6 +42,8 @@ const state = {
   roundsByCreator: new Map(),
   selectedRoundByCreator: new Map(),
   roundProductsByCreator: new Map(),
+  allRounds: [],
+  roundCountByCreator: new Map(),
   selectedRoundId: '',
   roundsLoading: new Set(),
   assetsByRound: new Map(),
@@ -78,6 +80,9 @@ function bindEvents() {
   $('#clearSelectedBtn').addEventListener('click', () => { state.selectedIds.clear(); render(); });
   $('#bulkApplyBtn').addEventListener('click', bulkApply);
   $('#resetViewBtn').addEventListener('click', resetView);
+  $('#clearOrderFilters').addEventListener('click', resetOrderFilters);
+  ['orderSearch','orderStageFilter','orderProductFilter','orderRoundFilter']
+    .forEach(id => $('#' + id).addEventListener('input', renderOrders));
   $('#newRoundBtn').addEventListener('click', startNewRound);
   $('#historyNewRoundBtn').addEventListener('click', startNewRound);
   $('#downloadRoundBtn').addEventListener('click', downloadRoundAssets);
@@ -164,10 +169,13 @@ async function loadRoundProductIndex() {
   state.roundProductsByCreator.clear();
   if (!isConfigured()) return;
   try {
-    const rows = await api('collaboration_rounds?select=creator_id,final_product');
+    const rows = await api('collaboration_rounds?select=id,creator_id,round_number,is_current,stage,product_direction,final_product,tracking_number,posted_date,created_at&order=created_at.desc');
+    state.allRounds = rows;
+    state.roundCountByCreator.clear();
     rows.forEach(round => {
       const products = state.roundProductsByCreator.get(round.creator_id) || [];
       state.roundProductsByCreator.set(round.creator_id, [...new Set(products.concat(productList(round.final_product)))]);
+      state.roundCountByCreator.set(round.creator_id, (state.roundCountByCreator.get(round.creator_id) || 0) + 1);
     });
   } catch (error) {
     console.warn('Historical product filtering is unavailable.', error);
@@ -253,12 +261,14 @@ function fillStaticOptions() {
   setOptions('#bulkReason', [''].concat(OPTIONS.reasons), '');
   setOptions('#bulkRights', [''].concat(OPTIONS.rights), '');
   setOptions('#roundStage', OPTIONS.stages, '');
-  setOptions('#roundProductDirection', OPTIONS.productDirections, '');
+  setOptions('#roundProductDirection', [''].concat(OPTIONS.productDirections), 'Choose direction');
   setOptions('#roundReason', OPTIONS.reasons, '');
   setOptions('#roundRights', OPTIONS.rights, '');
   setOptions('#roundPayment', OPTIONS.payments, '');
   setOptions('#roundContract', OPTIONS.contracts, '');
   setOptions('#roundRateType', OPTIONS.rates, '');
+  setOptions('#orderStageFilter', [''].concat(OPTIONS.stages), 'All');
+  setOptions('#orderProductFilter', [''].concat(OPTIONS.finalProducts.filter(Boolean)), 'All');
   renderFinalProductChoices('');
   fillFormSelect('tier', OPTIONS.tiers);
   fillFormSelect('account_type', OPTIONS.accountTypes);
@@ -291,6 +301,7 @@ function render() {
   renderDynamicFilters();
   renderMetrics();
   renderProductStats();
+  renderOrders();
   renderList();
   renderDetail();
   renderTabs();
@@ -309,7 +320,8 @@ function renderAppView() {
   document.body.dataset.appView = state.appView;
   const titles = {
     dashboard: 'Dashboard',
-    workspace: 'Creator Workspace'
+    workspace: 'Creator Workspace',
+    orders: 'Orders'
   };
   $('#viewTitle').textContent = titles[state.appView] || 'Creator CRM';
   $('#listTitle').textContent = 'Creators';
@@ -425,6 +437,93 @@ function allProductsForCreator(creator) {
   )];
 }
 
+function stableCode(prefix, id) {
+  const compact = String(id || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+  return `${prefix}-${(compact.slice(0, 7) || 'PENDING').padEnd(7, '0')}`;
+}
+
+function creatorCode(creator) {
+  return stableCode('CR', creator?.id);
+}
+
+function orderCode(round) {
+  return stableCode('OR', round?.id);
+}
+
+function upsertRoundIndex(round) {
+  if (!round?.id) return;
+  const index = state.allRounds.findIndex(item => item.id === round.id);
+  if (index >= 0) state.allRounds[index] = { ...state.allRounds[index], ...round };
+  else state.allRounds.unshift(round);
+  const creatorRounds = state.allRounds.filter(item => item.creator_id === round.creator_id);
+  state.roundCountByCreator.set(round.creator_id, creatorRounds.length);
+  state.roundProductsByCreator.set(
+    round.creator_id,
+    [...new Set(creatorRounds.flatMap(item => productList(item.final_product)))]
+  );
+}
+
+function collaborationCount(creator) {
+  return Math.max(state.roundCountByCreator.get(creator?.id) || 0, Number(creator?.collab_count || 0));
+}
+
+function resetOrderFilters() {
+  $('#orderSearch').value = '';
+  $('#orderStageFilter').value = '';
+  $('#orderProductFilter').value = '';
+  $('#orderRoundFilter').value = '';
+  renderOrders();
+}
+
+function filteredOrders() {
+  const query = ($('#orderSearch')?.value || '').trim().toLowerCase();
+  const stage = $('#orderStageFilter')?.value || '';
+  const product = $('#orderProductFilter')?.value || '';
+  const roundScope = $('#orderRoundFilter')?.value || '';
+  return state.allRounds.filter(round => {
+    const creator = state.creators.find(item => item.id === round.creator_id);
+    const haystack = [orderCode(round), creatorCode(creator), creator?.handle, round.final_product, round.tracking_number]
+      .join(' ').toLowerCase();
+    return (!query || haystack.includes(query))
+      && (!stage || round.stage === stage)
+      && (!product || productList(round.final_product).includes(product))
+      && (!roundScope || (roundScope === 'current' ? round.is_current : !round.is_current));
+  });
+}
+
+function renderOrders() {
+  const body = $('#ordersTableBody');
+  if (!body) return;
+  const rows = filteredOrders();
+  $('#ordersShown').textContent = `${rows.length} shown`;
+  $('#ordersTotal').textContent = `${state.allRounds.length} orders`;
+  body.innerHTML = rows.length ? rows.map(round => {
+    const creator = state.creators.find(item => item.id === round.creator_id);
+    return `<tr>
+      <td><strong class="order-code">${escapeHtml(orderCode(round))}</strong></td>
+      <td><span class="creator-code">${escapeHtml(creatorCode(creator))}</span><strong>@${escapeHtml(creator?.handle || 'Unknown')}</strong></td>
+      <td>Round ${escapeHtml(round.round_number || 1)}${round.is_current ? '<span class="badge green">Current</span>' : ''}</td>
+      <td><span class="badge rose">${escapeHtml(round.stage || 'Not contacted')}</span></td>
+      <td>${escapeHtml(productList(round.final_product).join(', ') || 'Not selected')}</td>
+      <td>${escapeHtml(round.tracking_number || 'Not filled')}</td>
+      <td>${escapeHtml(round.posted_date || '—')}</td>
+      <td><button class="mini secondary open-order" type="button" data-creator-id="${escapeHtml(round.creator_id)}" data-round-id="${escapeHtml(round.id)}">Open</button></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="8" class="orders-empty">No orders match these filters.</td></tr>';
+  body.querySelectorAll('.open-order').forEach(button => button.addEventListener('click', () => openOrder(button.dataset.creatorId, button.dataset.roundId)));
+}
+
+async function openOrder(creatorId, roundId) {
+  state.selectedRoundByCreator.set(creatorId, roundId);
+  state.selectedId = creatorId;
+  state.selectedRoundId = roundId;
+  state.activeTab = 'collaborations';
+  state.roundPage = 'overview';
+  state.appView = 'workspace';
+  render();
+  await loadRounds(creatorId, true);
+}
+
 function renderList() {
   const list = $('#creatorList');
   const creators = filteredCreators();
@@ -441,7 +540,7 @@ function renderList() {
     card.className = `creator-card ${c.id === state.selectedId ? 'active' : ''} ${checked ? 'checked' : ''}`;
     card.innerHTML = `
       <div class="creator-top">
-        <span class="creator-title"><input class="select-box" type="checkbox" ${checked ? 'checked' : ''} aria-label="Select @${escapeHtml(c.handle)}"><span class="handle">@${escapeHtml(c.handle)}</span></span>
+        <span class="creator-title"><input class="select-box" type="checkbox" ${checked ? 'checked' : ''} aria-label="Select @${escapeHtml(c.handle)}"><span><span class="handle">@${escapeHtml(c.handle)}</span><small class="creator-identity">${escapeHtml(creatorCode(c))} · ${collaborationCount(c)} collaboration${collaborationCount(c) === 1 ? '' : 's'}</small></span></span>
         <span class="card-actions">
           <button class="mini secondary edit-card" type="button">Edit</button>
           <button class="mini danger delete-card" type="button">Delete</button>
@@ -503,6 +602,7 @@ function renderDetail() {
   form.classList.toggle('hidden', !creator);
   if (!creator) return;
   $('#detailTitle').textContent = '@' + creator.handle;
+  $('#detailMeta').textContent = `${creatorCode(creator)} · ${collaborationCount(creator)} collaboration${collaborationCount(creator) === 1 ? '' : 's'}`;
   $('#profileLink').href = creator.profile_url || '#';
   FIELDS.forEach(field => {
     if (form.elements[field]) form.elements[field].value = creator[field] || '';
@@ -677,9 +777,10 @@ function renderRoundDetail() {
   if (!round) return clearRoundDetail('No collaboration selected');
   $('#roundEyebrow').textContent = round.is_current ? 'Current Collaboration' : 'Past Collaboration';
   $('#roundTitle').textContent = `Round ${round.round_number || 1}`;
+  $('#roundOrderId').textContent = orderCode(round);
   $('#roundStatus').textContent = round.stage || 'Not contacted';
   $('#roundStage').value = round.stage || 'Not contacted';
-  $('#roundProductDirection').value = round.product_direction || 'Scrunchie + Bandana';
+  $('#roundProductDirection').value = round.product_direction || '';
   $('#roundReason').value = round.reason_blocker || '';
   $('#roundRights').value = round.rights_status || 'Not discussed';
   $('#roundPayment').value = round.payment_status || 'Gifted';
@@ -698,6 +799,7 @@ function renderRoundDetail() {
 function clearRoundDetail(message = 'Loading collaboration...') {
   $('#roundEyebrow').textContent = message;
   $('#roundTitle').textContent = '';
+  $('#roundOrderId').textContent = '';
   $('#roundStatus').textContent = '';
   ['roundStage','roundProductDirection','roundReason','roundRights','roundPayment','roundContract','roundRateType']
     .forEach(id => { const element = $('#' + id); if (element) element.value = ''; });
@@ -1046,6 +1148,7 @@ async function saveRound(round) {
     creator.id,
     [...new Set(rounds.flatMap(item => productList(item.final_product)))]
   );
+  upsertRoundIndex(saved);
   state.selectedRoundByCreator.set(creator.id, saved.id);
   if (state.selectedId === creator.id) state.selectedRoundId = saved.id;
   if (state.assetsByRound.has(oldId) && oldId !== saved.id) {
@@ -1731,13 +1834,13 @@ async function startNewRound() {
       creator_id: creator.id,
       round_number: nextNumber,
       is_current: true,
-      stage: 'Replied',
-      product_direction: 'Both Sets',
+      stage: 'Not contacted',
+      product_direction: '',
       rights_status: savedCurrent.rights_status || 'Not discussed',
       payment_status: 'Gifted',
       contract_status: 'Not needed',
       rate_type: savedCurrent.rate_type || 'Unknown',
-      next_action: 'Choose product for repeat collaboration',
+      next_action: 'Start repeat collaboration outreach',
       final_product: '',
       tracking_number: '',
       shipping_address: savedCurrent.shipping_address || '',
@@ -1760,6 +1863,7 @@ async function startNewRound() {
       .map(round => ({ ...round, is_current: round.id === nextRound.id }))
       .sort((a, b) => Number(b.round_number) - Number(a.round_number));
     state.roundsByCreator.set(creator.id, updatedRounds);
+    updatedRounds.forEach(upsertRoundIndex);
     state.selectedRoundId = nextRound.id;
     state.selectedRoundByCreator.set(creator.id, nextRound.id);
     await syncCreatorFromRound(nextRound);
