@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Matchmate Creator CRM</title>
-    <link rel="stylesheet" href="./styles.css?v=20260727-7">
+    <link rel="stylesheet" href="./styles.css?v=20260811-1">
     <script src="./config.js"></script>
-    <script defer src="./app.js?v=20260728-1"></script>
+    <script defer src="./app.js?v=20260811-1"></script>
   </head>
   <body>
     <div class="app-shell">
@@ -18,6 +18,7 @@
       <nav aria-label="CRM modules">
         <button class="app-nav-button active" data-app-view="dashboard" type="button"><span>01</span><strong>Dashboard</strong><small>Pipeline overview</small></button>
         <button class="app-nav-button" data-app-view="workspace" type="button"><span>02</span><strong>Creator Workspace</strong><small>Search, collaborate and publish</small></button>
+        <button class="app-nav-button" data-app-view="orders" type="button"><span>03</span><strong>Orders</strong><small>Every collaboration round</small></button>
       </nav>
       <div class="app-nav-foot"><span class="live-dot"></span> Supabase connected</div>
     </aside>
@@ -53,6 +54,35 @@
           <div id="dashboardProducts" class="dashboard-products"></div>
         </section>
       </div>
+    </section>
+
+    <section id="ordersView" class="orders-view">
+      <div class="orders-heading">
+        <div>
+          <div class="eyebrow">Collaboration Operations</div>
+          <h2>Orders</h2>
+          <p>One order per collaboration round. Every order stays linked to its creator.</p>
+        </div>
+        <div class="orders-summary">
+          <span id="ordersShown">0 shown</span>
+          <strong id="ordersTotal">0 orders</strong>
+        </div>
+      </div>
+      <section class="orders-panel">
+        <div class="orders-filters">
+          <button id="clearOrderFilters" class="secondary" type="button">Clear Filters</button>
+          <label>Search<input id="orderSearch" type="search" placeholder="Order ID, creator, product, tracking"></label>
+          <label>Stage<select id="orderStageFilter"></select></label>
+          <label>Product<select id="orderProductFilter"></select></label>
+          <label>Round<select id="orderRoundFilter"><option value="">All</option><option value="current">Current only</option><option value="past">Past only</option></select></label>
+        </div>
+        <div class="orders-table-wrap">
+          <table class="orders-table">
+            <thead><tr><th>Order ID</th><th>Creator</th><th>Round</th><th>Stage</th><th>Final Product</th><th>Tracking</th><th>Posted</th><th></th></tr></thead>
+            <tbody id="ordersTableBody"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
     <main class="layout">
@@ -119,6 +149,7 @@
           <div>
             <div class="eyebrow">Selected Creator</div>
             <h2 id="detailTitle">Select a creator</h2>
+            <p id="detailMeta" class="detail-meta"></p>
           </div>
           <div class="top-actions">
             <a id="profileLink" class="button-link secondary" target="_blank" rel="noreferrer">Open IG</a>
@@ -154,6 +185,7 @@
                     <div>
                       <div id="roundEyebrow" class="eyebrow">Current Collaboration</div>
                       <strong id="roundTitle">Round 1</strong>
+                      <small id="roundOrderId" class="round-order-id"></small>
                     </div>
                     <button id="newRoundBtn" class="secondary compact-action" type="button">+ New Round</button>
                   </div>
