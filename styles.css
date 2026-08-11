@@ -172,6 +172,43 @@ button.full { width: 100%; margin-top: 10px; }
 }
 body[data-app-view="dashboard"] .dashboard-view { display: block; }
 body[data-app-view="dashboard"] .layout { display: none; }
+.orders-view { display: none; padding: 22px; min-height: calc(100vh - 73px); }
+body[data-app-view="orders"] .orders-view { display: block; }
+body[data-app-view="orders"] .layout { display: none; }
+.orders-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+.orders-heading h2 { margin-top: 4px; font-size: 28px; }
+.orders-heading p { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.orders-summary { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.orders-summary strong { color: var(--ink); font-size: 16px; }
+.orders-panel { overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: white; box-shadow: var(--shadow); }
+.orders-filters {
+  display: grid;
+  grid-template-columns: 120px minmax(240px, 1.5fr) repeat(3, minmax(140px, .7fr));
+  gap: 8px;
+  align-items: end;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background: #f7fcff;
+}
+.orders-filters label { margin: 0; gap: 4px; font-size: 10px; }
+.orders-filters input, .orders-filters select { min-height: 36px; padding: 7px 9px; }
+.orders-filters button { min-height: 36px; padding: 7px 10px; font-size: 11px; font-weight: 800; }
+.orders-table-wrap { overflow: auto; max-height: calc(100vh - 245px); }
+.orders-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.orders-table th { position: sticky; top: 0; z-index: 1; padding: 10px 12px; color: var(--muted); background: #f0f7fb; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.orders-table td { padding: 11px 12px; border-top: 1px solid var(--line); vertical-align: middle; }
+.orders-table tr:hover td { background: #f6fbfe; }
+.orders-table td:nth-child(2) { display: grid; gap: 2px; }
+.orders-table .badge { margin-left: 6px; }
+.order-code, .creator-code, .round-order-id { color: var(--accent-dark); font-size: 11px; letter-spacing: .03em; }
+.creator-code { display: block; color: var(--muted); font-size: 9px; font-weight: 700; }
+.orders-empty { padding: 34px !important; color: var(--muted); text-align: center; }
 .dashboard-heading {
   display: flex;
   align-items: end;
@@ -553,6 +590,7 @@ body[data-app-view="workspace"] .collapsible-panel .panel-content {
 .creator-card.checked { outline: 2px solid var(--accent); outline-offset: -2px; }
 .creator-top { display: flex; justify-content: space-between; gap: 10px; }
 .creator-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.creator-identity { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .02em; }
 .card-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 button.mini {
   min-height: 28px;
@@ -593,6 +631,8 @@ button.mini {
   top: 0;
   z-index: 5;
 }
+.detail-meta { margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.round-order-id { display: block; margin-top: 3px; }
 #creatorForm {
   flex: 1;
   min-height: 0;
@@ -1009,10 +1049,13 @@ body:not([data-detail-tab="profile"]) #deleteBtn { display: none; }
     padding: 10px;
   }
   .app-nav-brand, .app-nav-foot { display: none; }
-  .app-nav nav { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+  .app-nav nav { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
   .app-nav-button { min-height: 48px; grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .app-nav-button > span, .app-nav-button small { display: none; }
   .dashboard-metrics, .dashboard-grid { grid-template-columns: 1fr; }
+  .orders-view { padding: 12px; }
+  .orders-heading { align-items: flex-start; flex-direction: column; }
+  .orders-filters { grid-template-columns: 1fr 1fr; }
   .topbar, .section-head { align-items: flex-start; flex-direction: column; }
   .layout { display: block; }
   .sidebar { display: block; padding: 10px; }
