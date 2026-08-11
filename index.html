@@ -38,11 +38,16 @@
       </header>
 
       <section id="dashboardView" class="view active">
-        <div class="page-heading"><div><h2>What needs attention</h2><p>Live operational totals, calculated from source records.</p></div></div>
+        <div class="page-heading"><div><h2>What needs attention</h2><p>Rates show the full funnel; queues separate DM work from fulfillment handoff.</p></div></div>
         <div id="dashboardCards" class="metric-grid"></div>
+        <div id="bottleneckNote" class="bottleneck-note"></div>
         <div class="dashboard-grid">
           <section class="surface"><div class="section-head"><div><p class="eyebrow">Outreach</p><h3>Creator follow-up</h3></div><button class="text-button" data-go="creators">Open creators</button></div><div id="outreachTasks" class="task-list"></div></section>
-          <section class="surface"><div class="section-head"><div><p class="eyebrow">Collaborations</p><h3>Delivery and publishing</h3></div><button class="text-button" data-go="collaborations">Open collaborations</button></div><div id="collaborationTasks" class="task-list"></div></section>
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Team handoff</p><h3>Collaboration execution</h3></div><button class="text-button" data-go="collaborations">Open collaborations</button></div><div id="collaborationTasks" class="task-list"></div></section>
+        </div>
+        <div class="dashboard-analysis">
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Pipeline</p><h3>Creator Progress</h3></div><button class="text-button" data-go="creators">Manage</button></div><div id="creatorProgress" class="pipeline-list"></div></section>
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Fulfillment</p><h3>Final Product Mix</h3></div><button class="text-button" data-go="collaborations">View rounds</button></div><div id="productMix" class="product-mix-list"></div></section>
         </div>
       </section>
 

@@ -80,7 +80,7 @@ export async function save(table,record){
 export async function archive(table,id){return save(table,{id,archived_at:new Date().toISOString()})}
 export async function count(table,filters={}){
   if(demoMode)return localRows(table,{pageSize:Number.MAX_SAFE_INTEGER,filters}).count;
-  const q=new URLSearchParams({select:'id',limit:'1'});Object.entries(filters).forEach(([k,v])=>q.set(k,`eq.${v}`));const result=await request(`${table}?${q}`,{headers:{Prefer:'count=exact'}});return result.count||0;
+  const q=new URLSearchParams({select:'id',limit:'1',archived_at:'is.null'});Object.entries(filters).forEach(([k,v])=>q.set(k,`eq.${v}`));const result=await request(`${table}?${q}`,{headers:{Prefer:'count=exact'}});return result.count||0;
 }
 export async function collaborationPage(options={}){
   if(demoMode){let rows=demo.collaborations.map(row=>hydrateCollaboration(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,v])=>v!==''&&v!=null).forEach(([key,value])=>{rows=rows.filter(row=>key==='product_id'?row.collaboration_products.some(item=>item.product_id===value):String(row[key]??'')===String(value))});const[field,direction]=sort.split('.');rows.sort((a,b)=>String(a[field]||'').localeCompare(String(b[field]||''))*(direction==='asc'?1:-1));return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
@@ -113,11 +113,82 @@ export async function bulkUpdateCreators(ids,patch){
 export async function logActivity({entityType,entityId,creatorId=null,collaborationId=null,action,before=null,after=null,note=''}){
   return save('activity_logs',{entity_type:entityType,entity_id:entityId,creator_id:creatorId,collaboration_id:collaborationId,action,before_data:before,after_data:after,note,created_by:currentSession()?.user?.id||null});
 }
-export async function dashboardCounts(){
-  if(demoMode){const c=demo.creators,o=demo.outreach_records,k=demo.collaborations,s=demo.shipments,d=demo.deliverables;return{totalCreators:c.length,notContacted:o.filter(x=>x.status==='Not Contacted').length,followUps:o.filter(x=>x.status==='Follow-up Due').length,negotiating:o.filter(x=>x.status==='Negotiating').length,ready:s.filter(x=>x.status==='Ready').length,shipped:s.filter(x=>x.status==='Shipped').length,delivered:s.filter(x=>x.status==='Delivered').length,contentDue:d.filter(x=>x.status==='Pending').length,published:k.filter(x=>x.stage==='Published').length}}
-  const queries=[['totalCreators','creators',{}],['notContacted','outreach_records',{status:'Not Contacted'}],['followUps','outreach_records',{status:'Follow-up Due'}],['negotiating','outreach_records',{status:'Negotiating'}],['ready','shipments',{status:'Ready'}],['shipped','shipments',{status:'Shipped'}],['delivered','shipments',{status:'Delivered'}],['contentDue','deliverables',{status:'Pending'}],['published','collaborations',{stage:'Published'}]];
-  return Object.fromEntries(await Promise.all(queries.map(async([key,table,filter])=>[key,await count(table,filter)])));
+export async function syncCollaborationProducts(collaborationId,productIds,ownerId=null){
+  const selected=[...new Set((productIds||[]).filter(Boolean))];
+  let rows;
+  if(demoMode)rows=(demo.collaboration_products||[]).filter(row=>row.collaboration_id===collaborationId);
+  else{const result=await request(`collaboration_products?collaboration_id=eq.${encodeURIComponent(collaborationId)}&select=*`);rows=result.data||[]}
+  const byProduct=new Map(rows.map(row=>[row.product_id,row]));
+  for(const row of rows){
+    const active=selected.includes(row.product_id);
+    if(active&&row.archived_at)await save('collaboration_products',{id:row.id,archived_at:null,quantity:row.quantity||1,owner_id:row.owner_id||ownerId});
+    if(!active&&!row.archived_at)await archive('collaboration_products',row.id);
+  }
+  for(const productId of selected){
+    if(byProduct.has(productId))continue;
+    const payload={collaboration_id:collaborationId,product_id:productId,quantity:1,is_primary:false,owner_id:ownerId,created_by:currentSession()?.user?.id||null};
+    if(demoMode)payload.product=demo.products.find(product=>product.id===productId)||null;
+    await save('collaboration_products',payload);
+  }
+  return related('collaboration_products','collaboration_id',collaborationId,'*,product:products(id,sku,name,category)');
 }
+export async function dashboardCounts(){
+  if(demoMode)return summarizeDashboard({totalCreators:demo.creators.length,outreach:demo.outreach_records,collaborations:demo.collaborations,shipments:demo.shipments,deliverables:demo.deliverables,publications:demo.publications,collaborationProducts:demo.collaboration_products});
+  const[totalCreators,outreach,collaborations,shipments,deliverables,publications,collaborationProducts]=await Promise.all([
+    count('creators'),
+    dashboardRows('outreach_records','creator_id,status,last_contact_at,updated_at,created_at','updated_at.desc'),
+    dashboardRows('collaborations','id,creator_id,stage,updated_at,created_at','updated_at.desc'),
+    dashboardRows('shipments','id,collaboration_id,status,updated_at,created_at','updated_at.desc'),
+    dashboardRows('deliverables','id,collaboration_id,status,due_at,updated_at,created_at','updated_at.desc'),
+    dashboardRows('publications','id,collaboration_id,status,published_at,updated_at,created_at','updated_at.desc'),
+    dashboardRows('collaboration_products','collaboration_id,product_id,product:products(id,name,sku,category)','created_at.desc')
+  ]);
+  return summarizeDashboard({totalCreators,outreach,collaborations,shipments,deliverables,publications,collaborationProducts});
+}
+async function dashboardRows(table,select,order){const{data}=await request(`${table}?select=${encodeURIComponent(select)}&archived_at=is.null&order=${order}&limit=5000`);return data||[]}
+function summarizeDashboard({totalCreators,outreach=[],collaborations=[],shipments=[],deliverables=[],publications=[],collaborationProducts=[]}){
+  const latestOutreach=new Map();
+  [...outreach].sort((a,b)=>stamp(b)-stamp(a)).forEach(row=>{if(!latestOutreach.has(row.creator_id))latestOutreach.set(row.creator_id,row)});
+  const outreachRows=[...latestOutreach.values()],contacted=new Set(outreachRows.filter(row=>row.status&&row.status!=='Not Contacted').map(row=>row.creator_id));
+  const repliedStatuses=new Set(['Replied','Negotiating','Converted']),replied=new Set(outreachRows.filter(row=>repliedStatuses.has(row.status)).map(row=>row.creator_id));
+  const collaborationCreators=new Set(collaborations.map(row=>row.creator_id).filter(Boolean)),collaborationIds=new Set(collaborations.map(row=>row.id));
+  const latestShipment=new Map();
+  [...shipments].sort((a,b)=>stamp(b)-stamp(a)).forEach(row=>{if(!latestShipment.has(row.collaboration_id))latestShipment.set(row.collaboration_id,row)});
+  const shipmentRows=[...latestShipment.values()],shippedIds=new Set(shipmentRows.filter(row=>['Shipped','Delivered'].includes(row.status)).map(row=>row.collaboration_id)),deliveredIds=new Set(shipmentRows.filter(row=>row.status==='Delivered').map(row=>row.collaboration_id));
+  const publishedIds=new Set(publications.filter(row=>row.status==='Published').map(row=>row.collaboration_id));
+  collaborations.filter(row=>['Published','Completed'].includes(row.stage)).forEach(row=>publishedIds.add(row.id));
+  const productMix=new Map();
+  collaborationProducts.forEach(row=>{const name=row.product?.name||row.product_id||'Unknown product';productMix.set(name,(productMix.get(name)||0)+1)});
+  const pipeline=[
+    ['Not Contacted',Math.max(0,totalCreators-contacted.size)],
+    ['DM / Follow-up',outreachRows.filter(row=>['Contacted','Awaiting Reply','Follow-up Due','No Response'].includes(row.status)).length],
+    ['Replied',outreachRows.filter(row=>row.status==='Replied').length],
+    ['Negotiating',outreachRows.filter(row=>row.status==='Negotiating').length],
+    ['Ready to fulfill',collaborations.filter(row=>row.stage==='Ready to Fulfill').length],
+    ['Shipped',shipmentRows.filter(row=>row.status==='Shipped').length],
+    ['Delivered',deliveredIds.size],
+    ['Published',publishedIds.size]
+  ];
+  const awaitingDetails=collaborations.filter(row=>row.stage==='Confirmed — Awaiting Details').length;
+  const readyIds=new Set([
+    ...collaborations.filter(row=>row.stage==='Ready to Fulfill').map(row=>row.id),
+    ...shipmentRows.filter(row=>row.status==='Ready').map(row=>row.collaboration_id)
+  ]),ready=readyIds.size;
+  const deliveredPendingPost=[...deliveredIds].filter(id=>!publishedIds.has(id)).length;
+  return{
+    totalCreators,notContacted:pipeline[0][1],followUps:outreachRows.filter(row=>row.status==='Follow-up Due').length,negotiating:pipeline[3][1],ready,
+    shipped:shipmentRows.filter(row=>row.status==='Shipped').length,delivered:deliveredIds.size,contentDue:deliverables.filter(row=>row.status==='Pending').length,published:publishedIds.size,
+    awaitingDetails,deliveredPendingPost,pipeline,productMix:[...productMix.entries()].sort((a,b)=>b[1]-a[1]),
+    rates:{
+      reply:rate(replied.size,contacted.size),
+      collaboration:rate(collaborationCreators.size,replied.size),
+      shipping:rate(shippedIds.size,collaborationIds.size),
+      post:rate(publishedIds.size,collaborationIds.size)
+    }
+  };
+}
+function stamp(row){return new Date(row.updated_at||row.last_contact_at||row.created_at||0).valueOf()||0}
+function rate(numerator,denominator){return{numerator,denominator,percent:denominator?Math.round(numerator/denominator*100):0}}
 export function exportRows(filename,rows){if(!rows.length)return;const keys=[...new Set(rows.flatMap(Object.keys))].filter(key=>!['creator_accounts','outreach_records','collaborations','creator','campaign','collaboration_products','shipments','deliverables'].includes(key));const csv=[keys.join(','),...rows.map(row=>keys.map(key=>`"${String(Array.isArray(row[key])?row[key].join('|'):row[key]??'').replaceAll('"','""')}"`).join(','))].join('\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)}
 export async function exportCreatorResults(options){return exportPaged('matchmate-creators.csv',creatorPage,options)}
 export async function exportCollaborationResults(options){return exportPaged('matchmate-collaborations.csv',collaborationPage,options)}

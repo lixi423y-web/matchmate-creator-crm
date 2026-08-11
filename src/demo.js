@@ -1,11 +1,20 @@
 import{OUTREACH_STATUSES,COLLABORATION_STAGES,FIT_VERDICTS,ACCOUNT_TYPES,DOG_SIZES}from'./constants.js';
 const products=[
-  {id:'prod-rose-set',sku:'RB-SET',name:'Rose Bloom Set'},
-  {id:'prod-mocha-set',sku:'MS-SET',name:'Mocha Sky Set'},
-  {id:'prod-lavender-set',sku:'LM-SET',name:'Lavender Mist Set'},
-  {id:'prod-wildflower-set',sku:'WC-SET',name:'Wildflower Charm Necklace Set'},
-  {id:'prod-ocean-set',sku:'OP-SET',name:'Ocean Pearl Necklace Set'},
-  {id:'prod-emerald-set',sku:'ED-SET',name:'Emerald Dew Necklace Set'}
+  {id:'prod-rose-set',sku:'RB-SET',name:'Rose Bloom Set',category:'Set'},
+  {id:'prod-mocha-set',sku:'MS-SET',name:'Mocha Sky Set',category:'Set'},
+  {id:'prod-lavender-set',sku:'LM-SET',name:'Lavender Mist Set',category:'Set'},
+  {id:'prod-wildflower-set',sku:'WC-SET',name:'Wildflower Charm Necklace Set',category:'Set'},
+  {id:'prod-ocean-set',sku:'OP-SET',name:'Ocean Pearl Necklace Set',category:'Set'},
+  {id:'prod-emerald-set',sku:'ED-SET',name:'Emerald Dew Necklace Set',category:'Set'},
+  {id:'prod-rose-scrunchie',sku:'RB-SCR',name:'Rose Bloom Scrunchie',category:'Scrunchie'},
+  {id:'prod-mocha-scrunchie',sku:'MS-SCR',name:'Mocha Sky Scrunchie',category:'Scrunchie'},
+  {id:'prod-lavender-scrunchie',sku:'LM-SCR',name:'Lavender Mist Scrunchie',category:'Scrunchie'},
+  {id:'prod-rose-bandana',sku:'RB-BAN',name:'Rose Bloom Bandana',category:'Bandana'},
+  {id:'prod-mocha-bandana',sku:'MS-BAN',name:'Mocha Sky Bandana',category:'Bandana'},
+  {id:'prod-lavender-bandana',sku:'LM-BAN',name:'Lavender Mist Bandana',category:'Bandana'},
+  {id:'prod-wildflower-necklace',sku:'WC-NEC',name:'Wildflower Charm Necklace',category:'Necklace'},
+  {id:'prod-ocean-necklace',sku:'OP-NEC',name:'Ocean Pearl Necklace',category:'Necklace'},
+  {id:'prod-emerald-necklace',sku:'ED-NEC',name:'Emerald Dew Necklace',category:'Necklace'}
 ];
 export function demoDatabase(size=1000){
   const creators=Array.from({length:size},(_,i)=>({

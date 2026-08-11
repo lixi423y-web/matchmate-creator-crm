@@ -34,9 +34,10 @@ node tests/demo-smoke.mjs
 2. Run `supabase/migrations/001_crm_v2_additive_schema.sql` in staging.
 3. Create the allowed team users in Supabase Auth.
 4. Run `supabase/migrations/002_legacy_backfill.sql`.
-5. Run `supabase/verification.sql` and complete user acceptance testing.
-6. Copy `config.example.js` to `config.js`, using only the project URL and publishable anon key.
-7. Run `003_security_cutover.sql` only after V1 is retired and V2 is approved.
+5. Run `supabase/migrations/004_operational_refinements.sql` so deliverable type and platform can remain open until agreed.
+6. Run `supabase/verification.sql` and complete user acceptance testing.
+7. Copy `config.example.js` to `config.js`, using only the project URL and publishable anon key.
+8. Run `003_security_cutover.sql` only after V1 is retired and V2 is approved.
 
 Never put a `service_role` or secret key in this repository. The browser uses Supabase Auth and authenticated RLS.
 
