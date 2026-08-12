@@ -35,5 +35,6 @@
 .product-option span{display:grid;gap:2px}
 .product-option small{color:var(--muted)}
 .editor-actions{display:flex;gap:8px;margin-top:14px}
+.danger-button{background:#fff;color:var(--danger);border-color:#e7aab4}
 @media(max-width:1250px){.metric-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:850px){.metric-grid,.dashboard-analysis,.product-groups{grid-template-columns:1fr}.handoff-banner,.packing-list{grid-template-columns:1fr}.bottleneck-note{align-items:flex-start;flex-direction:column;gap:3px}.pipeline-row{grid-template-columns:110px minmax(70px,1fr) 34px}}
