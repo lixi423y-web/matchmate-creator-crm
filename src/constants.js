@@ -18,7 +18,7 @@ export const CREATOR_FIELDS=['id','creator_code','display_name','legal_name','ni
 export function badgeClass(value=''){
   const v=String(value).toLowerCase();
   if(v.includes('published')||v.includes('completed')||v.includes('delivered')||v.includes('strong')||v.includes('converted'))return'green';
-  if(v.includes('declined')||v.includes('reject')||v.includes('no response')||v.includes('closed'))return'rose';
+  if(v.includes('declined')||v.includes('reject')||v.includes('no response')||v.includes('cancelled')||v.includes('closed'))return'rose';
   if(v.includes('follow')||v.includes('await')||v.includes('maybe')||v.includes('negotiat'))return'amber';
   return'';
 }
