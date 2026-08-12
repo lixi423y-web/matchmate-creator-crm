@@ -1,4 +1,4 @@
-import{demoDatabase}from'./demo.js?v=20260812-delete1';
+import{demoDatabase}from'./demo.js?v=20260813-import1';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const demoMode=new URLSearchParams(location.search).get('demo')==='1'||!cfg.supabaseUrl||!cfg.supabaseAnonKey;
@@ -73,8 +73,9 @@ export async function collaborationPage(options={}){
 }
 function hydrateCollaboration(row){const creator=demo.creators.find(c=>c.id===row.creator_id),creator_account=demo.creator_accounts.find(x=>x.creator_id===row.creator_id&&x.is_primary)||demo.creator_accounts.find(x=>x.creator_id===row.creator_id);return{...row,creator,creator_account,creator_name:creator?.display_name,creator_handle:creator_account?.handle,creator_profile_url:creator_account?.profile_url,campaign:demo.campaigns.find(c=>c.id===row.campaign_id),collaboration_products:demo.collaboration_products.filter(x=>x.collaboration_id===row.id),shipments:demo.shipments.filter(x=>x.collaboration_id===row.id),deliverables:demo.deliverables.filter(x=>x.collaboration_id===row.id)}}
 export async function creatorPage(options={}){
-  if(demoMode){const page=localRows('creators',options);page.data=page.data.map(row=>hydrateCreator(row));return page}
-  return list('creator_directory',{...options,select:'*'});
+  if(demoMode){let rows=demo.creators.map(row=>hydrateCreator(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,value])=>value!==''&&value!=null).forEach(([key,value])=>rows=rows.filter(row=>String(row[key]??'')===String(value)));const[field,direction]=sort.split('.');rows.sort((a,b)=>String(a[field]||'').localeCompare(String(b[field]||''))*(direction==='asc'?1:-1));return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
+  const query=encodeListQuery({...options,select:'*',searchFields:['display_name','nickname','contact_email','creator_code','primary_handle','location']});
+  return request(`creator_directory?${query}`,{headers:{Prefer:'count=exact'}});
 }
 function hydrateCreator(row){return{...row,creator_accounts:demo.creator_accounts.filter(x=>x.creator_id===row.id),outreach_records:demo.outreach_records.filter(x=>x.creator_id===row.id).slice(0,1),collaborations:demo.collaborations.filter(x=>x.creator_id===row.id)}}
 export async function referenceData(){
@@ -83,8 +84,37 @@ export async function referenceData(){
   return{owners:owners.data.map(x=>({...x,name:x.display_name||x.email||'Team member'})),campaigns:campaigns.data,products:products.data};
 }
 export async function creatorChoices(search=''){
-  if(demoMode)return demo.creators.filter(row=>!search||JSON.stringify(row).toLowerCase().includes(search.toLowerCase())).slice(0,100);
-  return(list('creator_directory',{pageSize:100,search,sort:'display_name.asc'})).then(result=>result.data);
+  if(demoMode)return demo.creators.filter(row=>!search||JSON.stringify(row).toLowerCase().includes(search.toLowerCase())).slice(0,1000);
+  return creatorPage({pageSize:1000,search,sort:'display_name.asc'}).then(result=>result.data);
+}
+function importKey(platform,handle){return`${String(platform||'Instagram').trim().toLowerCase()}|${String(handle||'').trim().replace(/^@/,'').toLowerCase()}`}
+function nonEmpty(record){return Object.fromEntries(Object.entries(record||{}).filter(([,value])=>value!==''&&value!=null))}
+export async function existingCreatorAccounts(){
+  if(demoMode)return demo.creator_accounts.filter(row=>!row.archived_at).map(row=>({...row}));
+  const{data}=await request('creator_accounts?select=id,creator_id,platform,handle,profile_url,followers,is_primary,link_status&archived_at=is.null&limit=5000');return data||[];
+}
+export async function importCreators(rows,mode='skip'){
+  const existing=await existingCreatorAccounts(),byKey=new Map(existing.map(account=>[importKey(account.platform,account.handle),account]));
+  const result={created:0,updated:0,skipped:0,errors:[]};
+  for(const row of rows){
+    if(row.error){result.errors.push({row:row.row,message:row.error});continue}
+    const key=importKey(row.account.platform,row.account.handle),match=byKey.get(key);
+    if(match&&mode==='skip'){result.skipped++;continue}
+    try{
+      if(match){
+        await save('creators',{id:match.creator_id,...nonEmpty(row.creator)});
+        const account=await save('creator_accounts',{id:match.id,...nonEmpty(row.account)});byKey.set(key,account);result.updated++;continue;
+      }
+      let creator,account;
+      try{
+        creator=await save('creators',{...nonEmpty(row.creator),display_name:row.creator.display_name||row.account.handle,nickname:row.creator.nickname||row.account.handle,relationship_status:'New'});
+        account=await save('creator_accounts',{...nonEmpty(row.account),creator_id:creator.id,is_primary:true,link_status:row.account.link_status||'Not checked'});
+        await save('outreach_records',{creator_id:creator.id,status:'Not Contacted',channel:String(row.account.platform||'Instagram').toLowerCase()==='instagram'?'Instagram DM':row.account.platform});
+        byKey.set(key,account);result.created++;
+      }catch(error){if(account?.id)try{await remove('creator_accounts',account.id)}catch{}if(creator?.id)try{await remove('creators',creator.id)}catch{}throw error}
+    }catch(error){result.errors.push({row:row.row,message:error.message||String(error)})}
+  }
+  return result;
 }
 export async function createCollaborationFromOutreach(creatorId,ownerId){
   const collaboration=await save('collaborations',{creator_id:creatorId,type:'Seeding',stage:'Confirmed — Awaiting Details',owner_id:ownerId,start_date:new Date().toISOString().slice(0,10),is_repeat:false});
