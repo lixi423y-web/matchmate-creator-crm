@@ -1,4 +1,4 @@
-import{demoDatabase}from'./demo.js?v=20260812-public';
+import{demoDatabase}from'./demo.js?v=20260812-cancel1';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const demoMode=new URLSearchParams(location.search).get('demo')==='1'||!cfg.supabaseUrl||!cfg.supabaseAnonKey;
@@ -86,6 +86,12 @@ export async function createCollaborationFromOutreach(creatorId,ownerId){
   const collaboration=await save('collaborations',{creator_id:creatorId,type:'Seeding',stage:'Confirmed — Awaiting Details',owner_id:ownerId,start_date:new Date().toISOString().slice(0,10),is_repeat:false});
   const outreach=(await related('outreach_records','creator_id',creatorId))[0];if(outreach)await save('outreach_records',{id:outreach.id,status:'Converted',converted_collaboration_id:collaboration.id});return collaboration;
 }
+export async function cancelCollaboration(record,reason){
+  const cancelledOn=new Date().toISOString().slice(0,10),note=`Cancelled ${cancelledOn}: ${reason.trim()}`,notes=[record.notes,note].filter(Boolean).join('\n');
+  const saved=await save('collaborations',{id:record.id,stage:'Closed',notes});
+  await logActivity({entityType:'collaboration',entityId:record.id,creatorId:record.creator_id,collaborationId:record.id,action:'Cancelled',before:record,after:saved,note:reason.trim()});
+  return saved;
+}
 export async function bulkUpdateCreators(ids,patch){
   if(demoMode){for(const id of ids)await save('creators',{id,...patch});return}
   for(let index=0;index<ids.length;index+=100){const chunk=ids.slice(index,index+100);await request(`creators?id=in.(${chunk.join(',')})`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(patch)})}
@@ -127,16 +133,18 @@ export async function dashboardCounts(){
 }
 async function dashboardRows(table,select,order){const{data}=await request(`${table}?select=${encodeURIComponent(select)}&archived_at=is.null&order=${order}&limit=5000`);return data||[]}
 function summarizeDashboard({totalCreators,outreach=[],collaborations=[],shipments=[],deliverables=[],publications=[],collaborationProducts=[]}){
+  const inactiveStages=new Set(['Cancelled','Closed']),activeCollaborations=collaborations.filter(row=>!inactiveStages.has(row.stage)),activeIds=new Set(activeCollaborations.map(row=>row.id));
+  shipments=shipments.filter(row=>activeIds.has(row.collaboration_id));deliverables=deliverables.filter(row=>activeIds.has(row.collaboration_id));publications=publications.filter(row=>activeIds.has(row.collaboration_id));collaborationProducts=collaborationProducts.filter(row=>activeIds.has(row.collaboration_id));
   const latestOutreach=new Map();
   [...outreach].sort((a,b)=>stamp(b)-stamp(a)).forEach(row=>{if(!latestOutreach.has(row.creator_id))latestOutreach.set(row.creator_id,row)});
   const outreachRows=[...latestOutreach.values()],contacted=new Set(outreachRows.filter(row=>row.status&&row.status!=='Not Contacted').map(row=>row.creator_id));
   const repliedStatuses=new Set(['Replied','Negotiating','Converted']),replied=new Set(outreachRows.filter(row=>repliedStatuses.has(row.status)).map(row=>row.creator_id));
-  const collaborationCreators=new Set(collaborations.map(row=>row.creator_id).filter(Boolean)),collaborationIds=new Set(collaborations.map(row=>row.id));
+  const collaborationCreators=new Set(activeCollaborations.map(row=>row.creator_id).filter(Boolean)),collaborationIds=activeIds;
   const latestShipment=new Map();
   [...shipments].sort((a,b)=>stamp(b)-stamp(a)).forEach(row=>{if(!latestShipment.has(row.collaboration_id))latestShipment.set(row.collaboration_id,row)});
   const shipmentRows=[...latestShipment.values()],shippedIds=new Set(shipmentRows.filter(row=>['Shipped','Delivered'].includes(row.status)).map(row=>row.collaboration_id)),deliveredIds=new Set(shipmentRows.filter(row=>row.status==='Delivered').map(row=>row.collaboration_id));
   const publishedIds=new Set(publications.filter(row=>row.status==='Published').map(row=>row.collaboration_id));
-  collaborations.filter(row=>['Published','Completed'].includes(row.stage)).forEach(row=>publishedIds.add(row.id));
+  activeCollaborations.filter(row=>['Published','Completed'].includes(row.stage)).forEach(row=>publishedIds.add(row.id));
   const productMix=new Map();
   collaborationProducts.forEach(row=>{const name=row.product?.name||row.product_id||'Unknown product';productMix.set(name,(productMix.get(name)||0)+1)});
   const pipeline=[
@@ -144,14 +152,14 @@ function summarizeDashboard({totalCreators,outreach=[],collaborations=[],shipmen
     ['DM / Follow-up',outreachRows.filter(row=>['Contacted','Awaiting Reply','Follow-up Due','No Response'].includes(row.status)).length],
     ['Replied',outreachRows.filter(row=>row.status==='Replied').length],
     ['Negotiating',outreachRows.filter(row=>row.status==='Negotiating').length],
-    ['Ready to fulfill',collaborations.filter(row=>row.stage==='Ready to Fulfill').length],
+    ['Ready to fulfill',activeCollaborations.filter(row=>row.stage==='Ready to Fulfill').length],
     ['Shipped',shipmentRows.filter(row=>row.status==='Shipped').length],
     ['Delivered',deliveredIds.size],
     ['Published',publishedIds.size]
   ];
-  const awaitingDetails=collaborations.filter(row=>row.stage==='Confirmed — Awaiting Details').length;
+  const awaitingDetails=activeCollaborations.filter(row=>row.stage==='Confirmed — Awaiting Details').length;
   const readyIds=new Set([
-    ...collaborations.filter(row=>row.stage==='Ready to Fulfill').map(row=>row.id),
+    ...activeCollaborations.filter(row=>row.stage==='Ready to Fulfill').map(row=>row.id),
     ...shipmentRows.filter(row=>row.status==='Ready').map(row=>row.collaboration_id)
   ]),ready=readyIds.size;
   const deliveredPendingPost=[...deliveredIds].filter(id=>!publishedIds.has(id)).length;
