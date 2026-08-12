@@ -1,4 +1,4 @@
-import{demoDatabase}from'./demo.js?v=20260812-cancel1';
+import{demoDatabase}from'./demo.js?v=20260812-delete1';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const demoMode=new URLSearchParams(location.search).get('demo')==='1'||!cfg.supabaseUrl||!cfg.supabaseAnonKey;
@@ -58,6 +58,10 @@ export async function save(table,record){
   const{data}=await request(`${table}?select=*`,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return data?.[0];
 }
 export async function archive(table,id){return save(table,{id,archived_at:new Date().toISOString()})}
+export async function remove(table,id){
+  if(demoMode){const rows=demo[table]||[],index=rows.findIndex(row=>row.id===id);if(index>=0)rows.splice(index,1);return}
+  await request(`${table}?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',headers:{Prefer:'return=minimal'}});
+}
 export async function count(table,filters={}){
   if(demoMode)return localRows(table,{pageSize:Number.MAX_SAFE_INTEGER,filters}).count;
   const q=new URLSearchParams({select:'id',limit:'1',archived_at:'is.null'});Object.entries(filters).forEach(([k,v])=>q.set(k,`eq.${v}`));const result=await request(`${table}?${q}`,{headers:{Prefer:'count=exact'}});return result.count||0;
@@ -91,6 +95,15 @@ export async function cancelCollaboration(record,reason){
   const saved=await save('collaborations',{id:record.id,stage:'Closed',notes});
   await logActivity({entityType:'collaboration',entityId:record.id,creatorId:record.creator_id,collaborationId:record.id,action:'Cancelled',before:record,after:saved,note:reason.trim()});
   return saved;
+}
+export async function deleteErroneousCollaboration(record,reason){
+  const relatedRows=await Promise.all(['shipments','deliverables','publications','assets'].map(table=>related(table,'collaboration_id',record.id)));
+  const labels=['shipment','deliverable','publication','asset'],blockers=relatedRows.flatMap((rows,index)=>rows.length?[`${rows.length} ${labels[index]}${rows.length===1?'':'s'}`]:[]);
+  if(blockers.length)throw new Error(`Permanent deletion is blocked because this record has ${blockers.join(', ')}. Cancel it instead so its history stays intact.`);
+  const outreachRows=await related('outreach_records','converted_collaboration_id',record.id);
+  for(const row of outreachRows)await save('outreach_records',{id:row.id,converted_collaboration_id:null,status:row.status==='Converted'?'Awaiting Reply':row.status});
+  await logActivity({entityType:'collaboration_deletion',entityId:record.id,creatorId:record.creator_id,action:'Erroneous record permanently deleted',before:record,note:reason.trim()});
+  await remove('collaborations',record.id);
 }
 export async function bulkUpdateCreators(ids,patch){
   if(demoMode){for(const id of ids)await save('creators',{id,...patch});return}
