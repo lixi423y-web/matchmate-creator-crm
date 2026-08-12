@@ -87,7 +87,7 @@ export async function collaborationPage(options={}){
   const query=encodeListQuery({...options,searchFields:['collaboration_code','collaboration_name','creator_name','creator_handle','campaign_name','product_names']});
   return request(`collaboration_directory?${query}`,{headers:{Prefer:'count=exact'}});
 }
-function hydrateCollaboration(row){return{...row,creator:demo.creators.find(c=>c.id===row.creator_id),campaign:demo.campaigns.find(c=>c.id===row.campaign_id),collaboration_products:demo.collaboration_products.filter(x=>x.collaboration_id===row.id),shipments:demo.shipments.filter(x=>x.collaboration_id===row.id),deliverables:demo.deliverables.filter(x=>x.collaboration_id===row.id)}}
+function hydrateCollaboration(row){const creator=demo.creators.find(c=>c.id===row.creator_id),creator_account=demo.creator_accounts.find(x=>x.creator_id===row.creator_id&&x.is_primary)||demo.creator_accounts.find(x=>x.creator_id===row.creator_id);return{...row,creator,creator_account,creator_name:creator?.display_name,creator_handle:creator_account?.handle,creator_profile_url:creator_account?.profile_url,campaign:demo.campaigns.find(c=>c.id===row.campaign_id),collaboration_products:demo.collaboration_products.filter(x=>x.collaboration_id===row.id),shipments:demo.shipments.filter(x=>x.collaboration_id===row.id),deliverables:demo.deliverables.filter(x=>x.collaboration_id===row.id)}}
 export async function creatorPage(options={}){
   if(demoMode){const page=localRows('creators',options);page.data=page.data.map(row=>hydrateCreator(row));return page}
   return list('creator_directory',{...options,select:'*'});
