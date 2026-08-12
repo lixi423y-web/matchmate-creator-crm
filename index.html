@@ -1,343 +1,93 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Matchmate Creator CRM</title>
-    <link rel="stylesheet" href="./styles.css?v=20260811-1">
-    <script src="./config.js"></script>
-    <script defer src="./app.js?v=20260811-1"></script>
-  </head>
-  <body>
-    <div class="app-shell">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Matchmate creator outreach and collaboration operations">
+  <title>Matchmate Creator CRM</title>
+  <link rel="stylesheet" href="./styles.css?v=20260812-public">
+</head>
+<body>
+  <div id="app" class="app-shell hidden">
     <aside class="app-nav">
-      <div class="app-nav-brand">
-        <span class="brand-mark">M</span>
-        <div><strong>Matchmate</strong><small>Creator Operations</small></div>
-      </div>
-      <nav aria-label="CRM modules">
-        <button class="app-nav-button active" data-app-view="dashboard" type="button"><span>01</span><strong>Dashboard</strong><small>Pipeline overview</small></button>
-        <button class="app-nav-button" data-app-view="workspace" type="button"><span>02</span><strong>Creator Workspace</strong><small>Search, collaborate and publish</small></button>
-        <button class="app-nav-button" data-app-view="orders" type="button"><span>03</span><strong>Orders</strong><small>Every collaboration round</small></button>
+      <div class="brand-lockup"><span class="brand-mark">M</span><div><strong>Matchmate</strong><small>Creator Operations</small></div></div>
+      <nav aria-label="Primary navigation">
+        <button class="nav-button active" data-view="dashboard" type="button"><span>01</span><strong>Dashboard</strong><small>Priorities and health</small></button>
+        <button class="nav-button" data-view="creators" type="button"><span>02</span><strong>Creators</strong><small>Profiles and outreach</small></button>
+        <button class="nav-button" data-view="collaborations" type="button"><span>03</span><strong>Collaborations</strong><small>Confirmed work only</small></button>
       </nav>
-      <div class="app-nav-foot"><span class="live-dot"></span> Supabase connected</div>
+      <div class="nav-foot"><span>Shared link</span><span id="environmentBadge">Live</span></div>
     </aside>
 
-    <div class="app-main">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">Matchmate Growth</div>
-        <h1 id="viewTitle">Dashboard</h1>
-      </div>
-      <div class="top-actions">
-        <span id="status" class="status-pill">Loading</span>
-        <button id="refreshBtn" class="secondary" type="button">Refresh</button>
-        <button id="exportBtn" class="secondary" type="button">Export Filtered CSV</button>
-        <button id="exportAllBtn" class="secondary" type="button">Export All CSV</button>
-        <label class="file-button">Import CSV<input id="importInput" type="file" accept=".csv,text/csv"></label>
-      </div>
-    </header>
+    <main class="app-main">
+      <header class="topbar">
+        <div><p class="eyebrow">Matchmate Growth</p><h1 id="pageTitle">Dashboard</h1></div>
+        <div class="top-actions"><span id="saveStatus" class="status-pill">Ready</span><button id="refreshBtn" class="secondary" type="button">Refresh</button></div>
+      </header>
 
-    <section id="dashboardView" class="dashboard-view">
-      <div class="dashboard-heading">
-        <div><div class="eyebrow">Creator Operations</div><h2>Pipeline Overview</h2><p>One view of sourcing, collaboration progress and content delivery.</p></div>
-        <button class="secondary" data-open-view="workspace" type="button">Open Creator Workspace</button>
-      </div>
-      <div id="dashboardMetrics" class="dashboard-metrics"></div>
-      <div class="dashboard-grid">
-        <section class="dashboard-panel">
-          <div class="dashboard-panel-head"><div><span>Pipeline</span><h3>Creator Progress</h3></div><button class="text-action" data-open-view="workspace" type="button">Manage</button></div>
-          <div id="dashboardWorkflow" class="dashboard-workflow"></div>
-        </section>
-        <section class="dashboard-panel">
-          <div class="dashboard-panel-head"><div><span>Fulfillment</span><h3>Final Product Mix</h3></div></div>
-          <div id="dashboardProducts" class="dashboard-products"></div>
-        </section>
-      </div>
-    </section>
-
-    <section id="ordersView" class="orders-view">
-      <div class="orders-heading">
-        <div>
-          <div class="eyebrow">Collaboration Operations</div>
-          <h2>Orders</h2>
-          <p>One order per collaboration round. Every order stays linked to its creator.</p>
+      <section id="dashboardView" class="view active">
+        <div class="page-heading"><div><h2>What needs attention</h2><p>Rates show the full funnel; queues separate DM work from fulfillment handoff.</p></div></div>
+        <div id="dashboardCards" class="metric-grid"></div>
+        <div id="bottleneckNote" class="bottleneck-note"></div>
+        <div class="dashboard-grid">
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Outreach</p><h3>Creator follow-up</h3></div><button class="text-button" data-go="creators">Open creators</button></div><div id="outreachTasks" class="task-list"></div></section>
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Team handoff</p><h3>Collaboration execution</h3></div><button class="text-button" data-go="collaborations">Open collaborations</button></div><div id="collaborationTasks" class="task-list"></div></section>
         </div>
-        <div class="orders-summary">
-          <span id="ordersShown">0 shown</span>
-          <strong id="ordersTotal">0 orders</strong>
-        </div>
-      </div>
-      <section class="orders-panel">
-        <div class="orders-filters">
-          <button id="clearOrderFilters" class="secondary" type="button">Clear Filters</button>
-          <label>Search<input id="orderSearch" type="search" placeholder="Order ID, creator, product, tracking"></label>
-          <label>Stage<select id="orderStageFilter"></select></label>
-          <label>Product<select id="orderProductFilter"></select></label>
-          <label>Round<select id="orderRoundFilter"><option value="">All</option><option value="current">Current only</option><option value="past">Past only</option></select></label>
-        </div>
-        <div class="orders-table-wrap">
-          <table class="orders-table">
-            <thead><tr><th>Order ID</th><th>Creator</th><th>Round</th><th>Stage</th><th>Final Product</th><th>Tracking</th><th>Posted</th><th></th></tr></thead>
-            <tbody id="ordersTableBody"></tbody>
-          </table>
+        <div class="dashboard-analysis">
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Pipeline</p><h3>Creator Progress</h3></div><button class="text-button" data-go="creators">Manage</button></div><div id="creatorProgress" class="pipeline-list"></div></section>
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Fulfillment</p><h3>Final Product Mix</h3></div><button class="text-button" data-go="collaborations">View rounds</button></div><div id="productMix" class="product-mix-list"></div></section>
         </div>
       </section>
-    </section>
 
-    <main class="layout">
-      <aside class="sidebar">
-        <section class="panel module-workspace">
-          <h2>Workflow View</h2>
-          <p class="muted">Use queues for outreach and fulfillment handoff.</p>
-          <div id="workflow"></div>
+      <section id="creatorsView" class="view">
+        <div class="page-heading"><div><h2>Creator database</h2><p>One persistent creator profile; collaboration rounds stay separate.</p></div><button id="newCreatorBtn" type="button">Add creator</button></div>
+        <section class="surface data-surface">
+          <div id="creatorFilters" class="filter-bar">
+            <label class="search-field">Search<input name="search" type="search" placeholder="Handle, name, email or note"></label>
+            <label>Outreach<select name="outreach_status"></select></label>
+            <label>Fit<select name="fit_verdict"></select></label>
+            <label>Tier<select name="tier"></select></label>
+            <label>Account<select name="account_type"></select></label>
+            <label>Dog size<select name="dog_size"></select></label>
+            <label>Owner<select name="owner_id"></select></label>
+            <button class="secondary clear-filters" type="button">Clear</button>
+          </div>
+          <div class="table-toolbar">
+            <div><button id="selectPageBtn" class="secondary compact" type="button">Select page</button><button id="clearSelectionBtn" class="secondary compact" type="button">Clear selection</button><span id="creatorSelectionCount" class="muted">0 selected</span></div>
+            <div><button id="bulkCreatorBtn" class="secondary compact" type="button">Bulk actions</button><button id="exportCreatorsBtn" class="secondary compact" type="button">Export CSV</button></div>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th class="check-col"></th><th>Creator</th><th>Primary account</th><th>Fit</th><th>Outreach</th><th>Owner</th><th>Last contact</th><th>Collaborations</th><th class="action-col"></th></tr></thead><tbody id="creatorRows"></tbody></table></div>
+          <div id="creatorPagination" class="pagination"></div>
         </section>
-
-        <section class="panel filters-panel module-workspace">
-          <h2>Filters</h2>
-          <button id="resetViewBtn" class="secondary full" type="button">Clear Filters</button>
-          <label>Search<input id="searchInput" type="search" placeholder="handle, product, address, tracking"></label>
-          <label>Stage<select id="stageFilter"></select></label>
-          <label>Final product<select id="productFilter"></select></label>
-          <label>Tier<select id="tierFilter"></select></label>
-          <label>Account type<select id="accountTypeFilter"></select></label>
-          <label>Appearance<select id="appearanceFilter"></select></label>
-          <label>Dog size<select id="dogSizeFilter"></select></label>
-          <label>Source<select id="sourceFilter"></select></label>
-          <label class="checkline"><input id="excludeNoReply" type="checkbox"> Exclude no reply x2</label>
-        </section>
-
-        <details class="panel collapsible-panel module-workspace">
-          <summary><span>Bulk Actions</span><small id="bulkScope">Applies to filtered creators.</small></summary>
-          <div class="panel-content">
-            <div class="row">
-              <button id="selectFilteredBtn" class="secondary" type="button">Select Shown</button>
-              <button id="invertFilteredBtn" class="secondary" type="button">Invert</button>
-              <button id="clearSelectedBtn" class="secondary" type="button">Clear</button>
-            </div>
-            <label>Stage<select id="bulkStage"></select></label>
-            <label>Product direction<select id="bulkProductDirection"></select></label>
-            <label>Reason / Blocker<select id="bulkReason"></select></label>
-            <label>Rights<select id="bulkRights"></select></label>
-            <button id="bulkApplyBtn" type="button">Apply</button>
-          </div>
-        </details>
-
-        <details class="panel subtle collapsible-panel module-workspace">
-          <summary><span>Sourcing Rules</span><small>Current screening standard</small></summary>
-          <div class="panel-content">
-            <p><strong>Primary fit:</strong> US-based, 200-10k followers, clean visuals, owner appears often, prior brand collaboration.</p>
-            <p><strong>Best accounts:</strong> human + pet, young lifestyle, fashion/beauty, city or polished suburban settings.</p>
-            <p><strong>Avoid:</strong> broken/private links, dog-only feeds, rural/outdoor-heavy content, weak owner style, non-US accounts.</p>
-          </div>
-        </details>
-      </aside>
-
-      <section class="list-panel">
-        <div class="section-head">
-          <div>
-            <h2 id="listTitle">Creators</h2>
-            <p id="listCount" class="muted"></p>
-          </div>
-          <button id="addBtn" type="button">Add</button>
-        </div>
-        <div id="creatorList" class="creator-list"></div>
       </section>
 
-      <section class="detail-panel">
-        <div class="section-head">
-          <div>
-            <div class="eyebrow">Selected Creator</div>
-            <h2 id="detailTitle">Select a creator</h2>
-            <p id="detailMeta" class="detail-meta"></p>
+      <section id="collaborationsView" class="view">
+        <div class="page-heading"><div><h2>Collaboration center</h2><p>One confirmed round per record, with products, shipments and content attached.</p></div><button id="newCollaborationBtn" type="button">Create collaboration</button></div>
+        <section class="surface data-surface">
+          <div id="collaborationFilters" class="filter-bar">
+            <label class="search-field">Search<input name="search" type="search" placeholder="Collaboration ID, creator, campaign"></label>
+            <label>Stage<select name="stage"></select></label>
+            <label>Campaign<select name="campaign_id"></select></label>
+            <label>Product<select name="product_id"></select></label>
+            <label>Owner<select name="owner_id"></select></label>
+            <label>Start<input name="start_date" type="date"></label>
+            <label>End<input name="end_date" type="date"></label>
+            <button class="secondary clear-filters" type="button">Clear</button>
           </div>
-          <div class="top-actions">
-            <a id="profileLink" class="button-link secondary" target="_blank" rel="noreferrer">Open IG</a>
-            <button id="editBtn" class="secondary" type="button">Edit</button>
-            <button id="saveBtn" type="button">Save</button>
-            <button id="deleteBtn" class="danger" type="button">Delete</button>
-          </div>
-        </div>
-
-        <form id="creatorForm" class="hidden">
-          <nav class="tabs creator-tabs">
-            <button class="tab-button active" data-tab="profile" type="button">Overview</button>
-            <button class="tab-button" data-tab="collaborations" type="button">Current Collaboration</button>
-            <button class="tab-button" data-tab="content" type="button">Content</button>
-            <button class="tab-button" data-tab="history" type="button">History</button>
-          </nav>
-
-          <div class="detail-body">
-            <section id="tab-collaborations" class="tab-panel">
-              <div class="round-workspace">
-                <div class="round-toolbar">
-                  <div class="round-picker">
-                    <div>
-                      <div class="eyebrow">Partnership Timeline</div>
-                      <label class="round-select-label">
-                        <span>Collaboration Round</span>
-                        <select id="roundList" aria-label="Collaboration Round"></select>
-                      </label>
-                    </div>
-                    <span id="roundStatus" class="badge blue">Active</span>
-                  </div>
-                  <div class="round-toolbar-actions">
-                    <div>
-                      <div id="roundEyebrow" class="eyebrow">Current Collaboration</div>
-                      <strong id="roundTitle">Round 1</strong>
-                      <small id="roundOrderId" class="round-order-id"></small>
-                    </div>
-                    <button id="newRoundBtn" class="secondary compact-action" type="button">+ New Round</button>
-                  </div>
-                </div>
-
-                <div class="quick-actions stage-flow">
-                  <span class="quick-label">Move Round</span>
-                  <button type="button" data-action="DM sent">DM Sent</button>
-                  <button type="button" data-action="Follow-up">Follow-up</button>
-                  <button type="button" data-action="Address">Address</button>
-                  <button type="button" data-action="Shipped">Shipped</button>
-                  <button type="button" data-action="Delivered">Delivered</button>
-                  <button type="button" data-action="Posted">Posted</button>
-                </div>
-
-                <div class="round-console">
-                  <div class="round-detail">
-                  <div class="round-page active" data-round-page-panel="overview">
-                  <section class="round-section">
-                    <div class="round-section-head">
-                      <div>
-                        <span class="section-number">01</span>
-                        <h3>Agreement & Status</h3>
-                      </div>
-                      <p>What was agreed for this specific collaboration.</p>
-                    </div>
-                    <div class="grid four agreement-core">
-                      <label>Stage<select id="roundStage"></select></label>
-                      <label>Product Direction<select id="roundProductDirection"></select></label>
-                      <label>Reason / Blocker<select id="roundReason"></select></label>
-                      <label>Next Action<input id="roundNextAction"></label>
-                    </div>
-                    <details class="agreement-terms">
-                      <summary>
-                        <span>Seeding Terms</span>
-                        <small>Rights, payment, contract and rate</small>
-                      </summary>
-                      <div class="grid four agreement-secondary">
-                        <label>Rights Status<select id="roundRights"></select></label>
-                        <label>Payment Status<select id="roundPayment"></select></label>
-                        <label>Contract Status<select id="roundContract"></select></label>
-                        <label>Rate Type<select id="roundRateType"></select></label>
-                      </div>
-                    </details>
-                  </section>
-                  </div>
-
-                  <div class="round-page" data-round-page-panel="fulfillment">
-                  <section class="round-section">
-                    <div class="round-section-head">
-                      <div>
-                        <span class="section-number">01</span>
-                        <h3>Product & Fulfillment</h3>
-                      </div>
-                      <p>Everything your teammate needs to ship correctly.</p>
-                    </div>
-                    <label class="wide-field">Final Product<input id="roundFinalProduct" type="hidden"><div id="finalProductChoices" class="multi-choice"></div></label>
-                    <div class="grid two fulfillment-grid">
-                      <label>Shipping Address<textarea id="roundAddress" rows="4" placeholder="Paste full address"></textarea></label>
-                      <label>Pet Details<textarea id="roundPetDetails" rows="4" placeholder="Pet name, breed, neck size, fit notes"></textarea></label>
-                      <label class="tracking-field">Tracking Number<input id="roundTracking"></label>
-                    </div>
-                  </section>
-                  </div>
-
-                  <div class="round-page" data-round-page-panel="content">
-                  <section class="round-section publication-section">
-                    <div class="round-section-head">
-                      <div>
-                        <span class="section-number">01</span>
-                        <h3>Published Content</h3>
-                      </div>
-                      <p>Keep each live URL and publication date together.</p>
-                    </div>
-                    <div id="postLinks" class="post-links"></div>
-                    <button id="addPostLinkBtn" class="secondary" type="button">+ Add Another Publication</button>
-                    <label>Performance Note<textarea id="roundPerformance" rows="3"></textarea></label>
-                  </section>
-
-                  <section class="round-section content-box">
-                    <div class="round-section-head">
-                      <div>
-                        <span class="section-number">02</span>
-                        <h3>Asset Source <span class="optional-label">Optional</span></h3>
-                      </div>
-                      <div class="round-head-actions">
-                        <span id="assetCount" class="count-pill">0 items</span>
-                        <button id="downloadRoundBtn" class="secondary" type="button">Open / Download</button>
-                      </div>
-                    </div>
-                    <div class="asset-link-row">
-                      <label>Source Type<select id="assetType"></select></label>
-                      <input id="assetLinkInput" type="url" placeholder="Paste Drive, Dropbox, or delivered-content link">
-                      <button id="addAssetLinkBtn" class="secondary" type="button">Save Asset Source</button>
-                    </div>
-                    <p id="assetStatus" class="muted asset-status"></p>
-                    <div id="assetList" class="asset-list"></div>
-                    <div class="optional-upload">
-                      <span>Direct file upload (use only when necessary)</span>
-                      <label class="asset-file-button">Choose Files<input id="assetInput" type="file" accept="image/*,video/*,.pdf" multiple></label>
-                    </div>
-                  </section>
-                  </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section id="tab-profile" class="tab-panel active">
-              <div class="grid three">
-                <label>Handle<input name="handle"></label>
-                <label>Profile URL<input name="profile_url"></label>
-                <label>Tier<select name="tier"></select></label>
-                <label>Account Type<select name="account_type"></select></label>
-                <label>Appearance<select name="appearance"></select></label>
-                <label>Dog Size<select name="dog_size"></select></label>
-                <label>Fit Verdict<select name="fit_verdict"></select></label>
-                <label>Source Group<select name="source_group"></select></label>
-                <label>Source Detail<input name="source_detail"></label>
-                <label>Followers<input name="followers"></label>
-                <label>Location<input name="location"></label>
-                <label>Link Status<select name="link_status"></select></label>
-                <label>Contact Email<input name="contact_email"></label>
-                <label>Phone<input name="phone"></label>
-              </div>
-              <div class="grid two profile-notes-grid">
-                <label>Notes<textarea name="notes" rows="4"></textarea></label>
-                <label>Database Notes<textarea name="database_notes" rows="4"></textarea></label>
-                <label>DM Notes<textarea name="dm_notes" rows="4"></textarea></label>
-                <label>Last Message<textarea name="last_message" rows="4"></textarea></label>
-              </div>
-            </section>
-
-            <section id="tab-history" class="tab-panel">
-              <div class="history-heading">
-                <div>
-                  <div class="eyebrow">Partnership Timeline</div>
-                  <h3>Collaboration History</h3>
-                  <p>Every round stays attached to this creator, including products, assets and published links.</p>
-                </div>
-                <button id="historyNewRoundBtn" class="secondary" type="button">+ New Round</button>
-              </div>
-              <div id="roundHistory" class="round-history"></div>
-            </section>
-
-          </div>
-        </form>
-
-        <div id="emptyState" class="empty">Select a creator to review, message, ship, or track content.</div>
+          <div class="table-toolbar"><span id="collaborationCount" class="muted"></span><button id="exportCollaborationsBtn" class="secondary compact" type="button">Export CSV</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Collaboration</th><th>Creator</th><th>Campaign</th><th>Stage</th><th>Products</th><th>Shipment</th><th>Deliverables</th><th>Due</th><th>Owner</th><th class="action-col"></th></tr></thead><tbody id="collaborationRows"></tbody></table></div>
+          <div id="collaborationPagination" class="pagination"></div>
+        </section>
       </section>
     </main>
-    </div>
-    </div>
-  </body>
+  </div>
+
+  <aside id="drawer" class="drawer" aria-hidden="true"><div class="drawer-backdrop" data-close-drawer></div><section class="drawer-panel"><header><div><p id="drawerEyebrow" class="eyebrow"></p><h2 id="drawerTitle"></h2><p id="drawerSubtitle" class="muted"></p></div><button class="icon-button" data-close-drawer type="button" aria-label="Close">×</button></header><nav id="drawerTabs" class="drawer-tabs"></nav><div id="drawerBody" class="drawer-body"></div><footer id="drawerFooter"></footer></section></aside>
+
+  <dialog id="bulkDialog"><form method="dialog" class="dialog-form"><div class="section-head"><h2>Bulk update creators</h2><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p class="muted">Only selected fields are changed. Existing values are preserved.</p><label>Owner<select id="bulkOwner"></select></label><label>Fit verdict<select id="bulkFit"></select></label><label>Relationship<select id="bulkRelationship"></select></label><label>Tags<input id="bulkTags" placeholder="Comma-separated tags"></label><menu><button value="cancel" class="secondary">Cancel</button><button id="applyBulkBtn" value="default" type="button">Apply update</button></menu></form></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="./config.js?v=20260812-public"></script>
+  <script type="module" src="./src/app.js?v=20260812-public"></script>
+</body>
 </html>
