@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Matchmate creator outreach and collaboration operations">
+  <title>Matchmate Creator CRM</title>
+  <link rel="stylesheet" href="./styles.css?v=crm-v2">
+</head>
+<body>
+  <section id="authGate" class="auth-gate hidden" aria-live="polite">
+    <form id="loginForm" class="auth-panel">
+      <div class="brand-lockup"><span class="brand-mark">M</span><div><strong>Matchmate</strong><small>Creator Operations</small></div></div>
+      <h1>Sign in</h1>
+      <p>Authorized team members only.</p>
+      <label>Email<input id="loginEmail" type="email" autocomplete="email" required></label>
+      <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Sign in</button>
+      <span id="loginError" class="form-error"></span>
+    </form>
+  </section>
+
+  <div id="app" class="app-shell hidden">
+    <aside class="app-nav">
+      <div class="brand-lockup"><span class="brand-mark">M</span><div><strong>Matchmate</strong><small>Creator Operations</small></div></div>
+      <nav aria-label="Primary navigation">
+        <button class="nav-button active" data-view="dashboard" type="button"><span>01</span><strong>Dashboard</strong><small>Priorities and health</small></button>
+        <button class="nav-button" data-view="creators" type="button"><span>02</span><strong>Creators</strong><small>Profiles and outreach</small></button>
+        <button class="nav-button" data-view="collaborations" type="button"><span>03</span><strong>Collaborations</strong><small>Confirmed work only</small></button>
+      </nav>
+      <div class="nav-foot"><button id="signOutBtn" class="text-button" type="button">Sign out</button><span id="environmentBadge">Live</span></div>
+    </aside>
+
+    <main class="app-main">
+      <header class="topbar">
+        <div><p class="eyebrow">Matchmate Growth</p><h1 id="pageTitle">Dashboard</h1></div>
+        <div class="top-actions"><span id="saveStatus" class="status-pill">Ready</span><button id="refreshBtn" class="secondary" type="button">Refresh</button></div>
+      </header>
+
+      <section id="dashboardView" class="view active">
+        <div class="page-heading"><div><h2>What needs attention</h2><p>Rates show the full funnel; queues separate DM work from fulfillment handoff.</p></div></div>
+        <div id="dashboardCards" class="metric-grid"></div>
+        <div id="bottleneckNote" class="bottleneck-note"></div>
+        <div class="dashboard-grid">
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Outreach</p><h3>Creator follow-up</h3></div><button class="text-button" data-go="creators">Open creators</button></div><div id="outreachTasks" class="task-list"></div></section>
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Team handoff</p><h3>Collaboration execution</h3></div><button class="text-button" data-go="collaborations">Open collaborations</button></div><div id="collaborationTasks" class="task-list"></div></section>
+        </div>
+        <div class="dashboard-analysis">
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Pipeline</p><h3>Creator Progress</h3></div><button class="text-button" data-go="creators">Manage</button></div><div id="creatorProgress" class="pipeline-list"></div></section>
+          <section class="surface"><div class="section-head"><div><p class="eyebrow">Fulfillment</p><h3>Final Product Mix</h3></div><button class="text-button" data-go="collaborations">View rounds</button></div><div id="productMix" class="product-mix-list"></div></section>
+        </div>
+      </section>
+
+      <section id="creatorsView" class="view">
+        <div class="page-heading"><div><h2>Creator database</h2><p>One persistent creator profile; collaboration rounds stay separate.</p></div><button id="newCreatorBtn" type="button">Add creator</button></div>
+        <section class="surface data-surface">
+          <div id="creatorFilters" class="filter-bar">
+            <label class="search-field">Search<input name="search" type="search" placeholder="Handle, name, email or note"></label>
+            <label>Outreach<select name="outreach_status"></select></label>
+            <label>Fit<select name="fit_verdict"></select></label>
+            <label>Tier<select name="tier"></select></label>
+            <label>Account<select name="account_type"></select></label>
+            <label>Dog size<select name="dog_size"></select></label>
+            <label>Owner<select name="owner_id"></select></label>
+            <button class="secondary clear-filters" type="button">Clear</button>
+          </div>
+          <div class="table-toolbar">
+            <div><button id="selectPageBtn" class="secondary compact" type="button">Select page</button><button id="clearSelectionBtn" class="secondary compact" type="button">Clear selection</button><span id="creatorSelectionCount" class="muted">0 selected</span></div>
+            <div><button id="bulkCreatorBtn" class="secondary compact" type="button">Bulk actions</button><button id="exportCreatorsBtn" class="secondary compact" type="button">Export CSV</button></div>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th class="check-col"></th><th>Creator</th><th>Primary account</th><th>Fit</th><th>Outreach</th><th>Owner</th><th>Last contact</th><th>Collaborations</th><th class="action-col"></th></tr></thead><tbody id="creatorRows"></tbody></table></div>
+          <div id="creatorPagination" class="pagination"></div>
+        </section>
+      </section>
+
+      <section id="collaborationsView" class="view">
+        <div class="page-heading"><div><h2>Collaboration center</h2><p>One confirmed round per record, with products, shipments and content attached.</p></div><button id="newCollaborationBtn" type="button">Create collaboration</button></div>
+        <section class="surface data-surface">
+          <div id="collaborationFilters" class="filter-bar">
+            <label class="search-field">Search<input name="search" type="search" placeholder="Collaboration ID, creator, campaign"></label>
+            <label>Stage<select name="stage"></select></label>
+            <label>Campaign<select name="campaign_id"></select></label>
+            <label>Product<select name="product_id"></select></label>
+            <label>Owner<select name="owner_id"></select></label>
+            <label>Start<input name="start_date" type="date"></label>
+            <label>End<input name="end_date" type="date"></label>
+            <button class="secondary clear-filters" type="button">Clear</button>
+          </div>
+          <div class="table-toolbar"><span id="collaborationCount" class="muted"></span><button id="exportCollaborationsBtn" class="secondary compact" type="button">Export CSV</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Collaboration</th><th>Creator</th><th>Campaign</th><th>Stage</th><th>Products</th><th>Shipment</th><th>Deliverables</th><th>Due</th><th>Owner</th><th class="action-col"></th></tr></thead><tbody id="collaborationRows"></tbody></table></div>
+          <div id="collaborationPagination" class="pagination"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <aside id="drawer" class="drawer" aria-hidden="true"><div class="drawer-backdrop" data-close-drawer></div><section class="drawer-panel"><header><div><p id="drawerEyebrow" class="eyebrow"></p><h2 id="drawerTitle"></h2><p id="drawerSubtitle" class="muted"></p></div><button class="icon-button" data-close-drawer type="button" aria-label="Close">×</button></header><nav id="drawerTabs" class="drawer-tabs"></nav><div id="drawerBody" class="drawer-body"></div><footer id="drawerFooter"></footer></section></aside>
+
+  <dialog id="bulkDialog"><form method="dialog" class="dialog-form"><div class="section-head"><h2>Bulk update creators</h2><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p class="muted">Only selected fields are changed. Existing values are preserved.</p><label>Owner<select id="bulkOwner"></select></label><label>Fit verdict<select id="bulkFit"></select></label><label>Relationship<select id="bulkRelationship"></select></label><label>Tags<input id="bulkTags" placeholder="Comma-separated tags"></label><menu><button value="cancel" class="secondary">Cancel</button><button id="applyBulkBtn" value="default" type="button">Apply update</button></menu></form></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="./config.js"></script>
+  <script type="module" src="./src/app.js?v=crm-v2"></script>
+</body>
+</html>

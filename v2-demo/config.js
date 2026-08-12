@@ -1,0 +1,1 @@
+window.MATCHMATE_CONFIG = {};
