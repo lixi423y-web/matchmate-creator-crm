@@ -48,5 +48,9 @@
 .import-preview th{position:sticky;top:0;z-index:1}
 .import-preview td{padding:9px 11px}
 .import-error{color:var(--danger);font-weight:700}
+.sortable-header{padding:0}.sort-button{width:100%;min-height:42px;display:flex;align-items:center;justify-content:flex-start;gap:7px;border:0;border-radius:0;background:transparent;color:inherit;padding:10px 12px;font-size:inherit;text-transform:inherit;letter-spacing:inherit;white-space:nowrap}.sort-button:hover{filter:none;background:#eaf2f7}.sort-icon{font-size:15px;line-height:1;color:#8ca2b4}.sort-button.active .sort-icon{color:var(--blue)}
+.action-busy{cursor:wait}
+.action-busy button,.action-busy input,.action-busy select,.action-busy textarea{pointer-events:none}
+.draft-status{display:inline-flex;margin-top:7px;border-radius:999px;padding:4px 8px;background:var(--amber-2);color:var(--amber);font-size:11px;font-weight:750}
 @media(max-width:1250px){.metric-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:850px){.metric-grid,.dashboard-analysis,.product-groups,.import-controls{grid-template-columns:1fr}.handoff-banner,.packing-list{grid-template-columns:1fr}.bottleneck-note{align-items:flex-start;flex-direction:column;gap:3px}.pipeline-row{grid-template-columns:110px minmax(70px,1fr) 34px}.heading-actions{width:100%}.heading-actions button{flex:1}}

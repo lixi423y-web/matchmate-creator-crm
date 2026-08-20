@@ -7,6 +7,12 @@ let session=null;
 
 export const dataMode=demoMode?'demo':'live';
 export function currentSession(){return session}
+const UUID_FIELDS=new Set(['id','creator_id','campaign_id','collaboration_id','product_id','shipment_id','address_id','deliverable_id','publication_id','converted_collaboration_id','entity_id','created_by','owner_id']);
+export function normalizeWritePayload(record={}){
+  const payload={...record};delete payload._meta;
+  for(const key of UUID_FIELDS){if(key in payload&&typeof payload[key]==='string'&&!payload[key].trim()){if(key==='id')delete payload[key];else payload[key]=null}}
+  return payload;
+}
 function headers(extra={}){return{apikey:cfg.supabaseAnonKey,Authorization:`Bearer ${cfg.supabaseAnonKey||''}`,'Content-Type':'application/json',...extra}}
 async function request(path,options={}){
   const response=await fetch(`${cfg.supabaseUrl}/rest/v1/${path}`,{...options,headers:headers(options.headers)});
@@ -52,7 +58,7 @@ export async function related(table,column,id,select='*'){
   const{data}=await request(`${table}?${column}=eq.${encodeURIComponent(id)}&archived_at=is.null&select=${encodeURIComponent(select)}&order=created_at.desc`);return data||[];
 }
 export async function save(table,record){
-  const payload={...record};delete payload._meta;
+  const payload=normalizeWritePayload(record);
   if(demoMode){const rows=demo[table]||(demo[table]=[]);const index=rows.findIndex(row=>row.id===payload.id);if(index>=0)rows[index]={...rows[index],...payload,updated_at:new Date().toISOString()};else rows.unshift({...payload,id:payload.id||crypto.randomUUID(),created_at:new Date().toISOString(),updated_at:new Date().toISOString()});return index>=0?rows[index]:rows[0]}
   if(payload.id){const id=payload.id;delete payload.id;const{data}=await request(`${table}?id=eq.${encodeURIComponent(id)}&select=*`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return data?.[0]}
   const{data}=await request(`${table}?select=*`,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return data?.[0];
@@ -73,11 +79,12 @@ export async function collaborationPage(options={}){
 }
 function hydrateCollaboration(row){const creator=demo.creators.find(c=>c.id===row.creator_id),creator_account=demo.creator_accounts.find(x=>x.creator_id===row.creator_id&&x.is_primary)||demo.creator_accounts.find(x=>x.creator_id===row.creator_id);return{...row,creator,creator_account,creator_name:creator?.display_name,creator_handle:creator_account?.handle,creator_profile_url:creator_account?.profile_url,campaign:demo.campaigns.find(c=>c.id===row.campaign_id),collaboration_products:demo.collaboration_products.filter(x=>x.collaboration_id===row.id),shipments:demo.shipments.filter(x=>x.collaboration_id===row.id),deliverables:demo.deliverables.filter(x=>x.collaboration_id===row.id)}}
 export async function creatorPage(options={}){
-  if(demoMode){let rows=demo.creators.map(row=>hydrateCreator(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,value])=>value!==''&&value!=null).forEach(([key,value])=>rows=rows.filter(row=>String(row[key]??'')===String(value)));const[field,direction]=sort.split('.');rows.sort((a,b)=>String(a[field]||'').localeCompare(String(b[field]||''))*(direction==='asc'?1:-1));return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
+  if(demoMode){let rows=demo.creators.map(row=>hydrateCreator(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,value])=>value!==''&&value!=null).forEach(([key,value])=>rows=rows.filter(row=>String(row[key]??'')===String(value)));rows=sortCreatorRows(rows,sort);return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
   const query=encodeListQuery({...options,select:'*',searchFields:['display_name','nickname','contact_email','creator_code','primary_handle','location']});
   return request(`creator_directory?${query}`,{headers:{Prefer:'count=exact'}});
 }
-function hydrateCreator(row){return{...row,creator_accounts:demo.creator_accounts.filter(x=>x.creator_id===row.id),outreach_records:demo.outreach_records.filter(x=>x.creator_id===row.id).slice(0,1),collaborations:demo.collaborations.filter(x=>x.creator_id===row.id)}}
+function sortCreatorRows(rows,sort){const[field,direction]=sort.split('.'),factor=direction==='asc'?1:-1;return rows.sort((a,b)=>{const left=a[field],right=b[field];if((left==null||left==='')&&(right==null||right===''))return 0;if(left==null||left==='')return 1;if(right==null||right==='')return-1;const compared=typeof left==='number'&&typeof right==='number'?left-right:String(left).localeCompare(String(right),undefined,{numeric:true,sensitivity:'base'});return compared*factor})}
+function hydrateCreator(row){const creator_accounts=demo.creator_accounts.filter(x=>x.creator_id===row.id),outreach_records=demo.outreach_records.filter(x=>x.creator_id===row.id).slice(0,1),collaborations=demo.collaborations.filter(x=>x.creator_id===row.id),account=creator_accounts.find(x=>x.is_primary)||creator_accounts[0],outreach=outreach_records[0];return{...row,creator_accounts,outreach_records,collaborations,primary_handle:account?.handle||null,primary_platform:account?.platform||null,primary_profile_url:account?.profile_url||null,outreach_status:outreach?.status||'Not Contacted',last_contact_at:outreach?.last_contact_at||null,next_follow_up_at:outreach?.next_follow_up_at||null,collaboration_count:collaborations.length}}
 export async function referenceData(){
   if(demoMode)return{owners:demo.owners,campaigns:demo.campaigns,products:demo.products};
   const[owners,campaigns,products]=await Promise.all([list('crm_users',{pageSize:100,sort:'display_name.asc'}),list('campaigns',{pageSize:100,sort:'name.asc'}),list('products',{pageSize:500,sort:'name.asc'})]);
@@ -92,6 +99,26 @@ function nonEmpty(record){return Object.fromEntries(Object.entries(record||{}).f
 export async function existingCreatorAccounts(){
   if(demoMode)return demo.creator_accounts.filter(row=>!row.archived_at).map(row=>({...row}));
   const{data}=await request('creator_accounts?select=id,creator_id,platform,handle,profile_url,followers,is_primary,link_status&archived_at=is.null&limit=5000');return data||[];
+}
+export async function createCreatorWithPrimaryAccount({creator={},account={}}={}){
+  const handle=String(account.handle||'').replace(/^@/,'').trim();
+  if(!handle)throw new Error('Instagram Handle is required.');
+  const existing=await existingCreatorAccounts();
+  const duplicate=existing.find(item=>String(item.platform||'').toLowerCase()==='instagram'&&String(item.handle||'').replace(/^@/,'').trim().toLowerCase()===handle.toLowerCase());
+  if(duplicate)throw new Error(`@${handle} is already in Creator database.`);
+  const ownerId=creator.owner_id||null;
+  let savedCreator=null,savedAccount=null,savedOutreach=null;
+  try{
+    savedCreator=await save('creators',{...creator,display_name:String(creator.display_name||'').trim()||handle,nickname:String(creator.nickname||'').trim()||handle,relationship_status:creator.relationship_status||'New',owner_id:ownerId});
+    savedAccount=await save('creator_accounts',{creator_id:savedCreator.id,platform:'Instagram',handle,profile_url:String(account.profile_url||'').trim()||`https://www.instagram.com/${handle}/`,is_primary:true,link_status:'Not checked',owner_id:ownerId});
+    savedOutreach=await save('outreach_records',{creator_id:savedCreator.id,status:'Not Contacted',channel:'Instagram DM',owner_id:ownerId});
+    return savedCreator;
+  }catch(error){
+    if(savedOutreach?.id)try{await remove('outreach_records',savedOutreach.id)}catch{}
+    if(savedAccount?.id)try{await remove('creator_accounts',savedAccount.id)}catch{}
+    if(savedCreator?.id)try{await remove('creators',savedCreator.id)}catch{}
+    throw error;
+  }
 }
 export async function importCreators(rows,mode='skip'){
   const existing=await existingCreatorAccounts(),byKey=new Map(existing.map(account=>[importKey(account.platform,account.handle),account]));
@@ -117,14 +144,24 @@ export async function importCreators(rows,mode='skip'){
   return result;
 }
 export async function createCollaborationFromOutreach(creatorId,ownerId){
-  const collaboration=await save('collaborations',{creator_id:creatorId,type:'Seeding',stage:'Confirmed — Awaiting Details',owner_id:ownerId,start_date:new Date().toISOString().slice(0,10),is_repeat:false});
-  const outreach=(await related('outreach_records','creator_id',creatorId))[0];if(outreach)await save('outreach_records',{id:outreach.id,status:'Converted',converted_collaboration_id:collaboration.id});return collaboration;
+  let collaboration=null;
+  try{
+    collaboration=await save('collaborations',{creator_id:creatorId,type:'Seeding',stage:'Confirmed — Awaiting Details',owner_id:ownerId,start_date:new Date().toISOString().slice(0,10),is_repeat:false});
+    const outreach=(await related('outreach_records','creator_id',creatorId))[0];
+    if(outreach)await save('outreach_records',{id:outreach.id,status:'Converted',converted_collaboration_id:collaboration.id});
+    return collaboration;
+  }catch(error){
+    if(!collaboration?.id)throw error;
+    try{await remove('collaborations',collaboration.id)}catch(rollbackError){console.error('Collaboration rollback failed after outreach update failure',rollbackError);throw new Error('The collaboration was created, but its outreach status could not be updated and automatic rollback failed. Do not create it again; review the new collaboration record.')}
+    throw error;
+  }
 }
 export async function cancelCollaboration(record,reason){
   const cancelledOn=new Date().toISOString().slice(0,10),note=`Cancelled ${cancelledOn}: ${reason.trim()}`,notes=[record.notes,note].filter(Boolean).join('\n');
   const saved=await save('collaborations',{id:record.id,stage:'Closed',notes});
-  await logActivity({entityType:'collaboration',entityId:record.id,creatorId:record.creator_id,collaborationId:record.id,action:'Cancelled',before:record,after:saved,note:reason.trim()});
-  return saved;
+  let activityWarning=false;
+  try{await logActivity({entityType:'collaboration',entityId:record.id,creatorId:record.creator_id,collaborationId:record.id,action:'Cancelled',before:record,after:saved,note:reason.trim()})}catch(error){activityWarning=true;console.error('Activity log failed after collaboration cancellation',error)}
+  return{record:saved,activityWarning};
 }
 export async function deleteErroneousCollaboration(record,reason){
   const relatedRows=await Promise.all(['shipments','deliverables','publications','assets'].map(table=>related(table,'collaboration_id',record.id)));

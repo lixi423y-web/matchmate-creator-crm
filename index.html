@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Matchmate creator outreach and collaboration operations">
   <title>Matchmate Creator CRM</title>
-  <link rel="stylesheet" href="./styles.css?v=20260813-import1">
+  <link rel="stylesheet" href="./styles.css?v=20260821-unsaved-guard1">
 </head>
 <body>
   <div id="app" class="app-shell hidden">
@@ -56,7 +56,7 @@
             <div><button id="selectPageBtn" class="secondary compact" type="button">Select page</button><button id="clearSelectionBtn" class="secondary compact" type="button">Clear selection</button><span id="creatorSelectionCount" class="muted">0 selected</span></div>
             <div><button id="bulkCreatorBtn" class="secondary compact" type="button">Bulk actions</button><button id="exportCreatorsBtn" class="secondary compact" type="button">Export CSV</button></div>
           </div>
-          <div class="table-wrap"><table><thead><tr><th class="check-col"></th><th>Creator</th><th>Primary account</th><th>Fit</th><th>Outreach</th><th>Owner</th><th>Last contact</th><th>Collaborations</th><th class="action-col"></th></tr></thead><tbody id="creatorRows"></tbody></table></div>
+          <div class="table-wrap"><table><thead id="creatorTableHead"><tr><th class="check-col"></th><th class="sortable-header" aria-sort="none"><button class="sort-button" data-creator-sort="display_name" type="button">Creator<span class="sort-icon" aria-hidden="true">↕</span></button></th><th class="sortable-header" aria-sort="none"><button class="sort-button" data-creator-sort="primary_handle" type="button">Primary account<span class="sort-icon" aria-hidden="true">↕</span></button></th><th>Fit</th><th>Outreach</th><th>Owner</th><th class="sortable-header" aria-sort="descending"><button class="sort-button active" data-creator-sort="created_at" type="button">Added<span class="sort-icon" aria-hidden="true">↓</span></button></th><th class="sortable-header" aria-sort="none"><button class="sort-button" data-creator-sort="last_contact_at" type="button">Last contact<span class="sort-icon" aria-hidden="true">↕</span></button></th><th class="sortable-header" aria-sort="none"><button class="sort-button" data-creator-sort="collaboration_count" type="button">Collaborations<span class="sort-icon" aria-hidden="true">↕</span></button></th><th class="action-col"></th></tr></thead><tbody id="creatorRows"></tbody></table></div>
           <div id="creatorPagination" class="pagination"></div>
         </section>
       </section>
@@ -82,13 +82,13 @@
     </main>
   </div>
 
-  <aside id="drawer" class="drawer" aria-hidden="true"><div class="drawer-backdrop" data-close-drawer></div><section class="drawer-panel"><header><div><p id="drawerEyebrow" class="eyebrow"></p><h2 id="drawerTitle"></h2><p id="drawerSubtitle" class="muted"></p></div><button class="icon-button" data-close-drawer type="button" aria-label="Close">×</button></header><nav id="drawerTabs" class="drawer-tabs"></nav><div id="drawerBody" class="drawer-body"></div><footer id="drawerFooter"></footer></section></aside>
+  <aside id="drawer" class="drawer" aria-hidden="true"><div class="drawer-backdrop" data-close-drawer></div><section class="drawer-panel"><header><div><p id="drawerEyebrow" class="eyebrow"></p><h2 id="drawerTitle"></h2><p id="drawerSubtitle" class="muted"></p><span id="drawerDraftStatus" class="draft-status hidden" role="status">Unsaved changes</span></div><button class="icon-button" data-close-drawer type="button" aria-label="Close">×</button></header><nav id="drawerTabs" class="drawer-tabs"></nav><div id="drawerBody" class="drawer-body"></div><footer id="drawerFooter"></footer></section></aside>
 
   <dialog id="bulkDialog"><form method="dialog" class="dialog-form"><div class="section-head"><h2>Bulk update creators</h2><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p class="muted">Only selected fields are changed. Existing values are preserved.</p><label>Owner<select id="bulkOwner"></select></label><label>Fit verdict<select id="bulkFit"></select></label><label>Relationship<select id="bulkRelationship"></select></label><label>Tags<input id="bulkTags" placeholder="Comma-separated tags"></label><menu><button value="cancel" class="secondary">Cancel</button><button id="applyBulkBtn" value="default" type="button">Apply update</button></menu></form></dialog>
   <dialog id="creatorImportDialog" class="import-dialog"><form method="dialog" class="dialog-form"><div class="section-head"><div><p class="eyebrow">Creator database</p><h2>Import creators</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p class="muted">Preview first. Importing creators never creates collaborations or overwrites shipping and history records.</p><div class="import-controls"><label>CSV file<input id="creatorCsvFile" type="file" accept=".csv,text/csv"></label><label>Existing accounts<select id="creatorImportMode"><option value="skip">Skip existing (recommended)</option><option value="update">Update non-empty profile fields</option></select></label></div><button id="downloadCreatorTemplateBtn" class="secondary compact template-button" type="button">Download CSV template</button><div id="creatorImportSummary" class="import-summary muted">Choose a CSV to preview.</div><div id="creatorImportPreview" class="import-preview"></div><menu><button value="cancel" class="secondary">Cancel</button><button id="confirmCreatorImportBtn" value="default" type="button" disabled>Import creators</button></menu></form></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="./config.js?v=20260813-import1"></script>
-  <script type="module" src="./src/app.js?v=20260813-import1"></script>
+  <script type="module" src="./src/app.js?v=20260821-unsaved-guard3"></script>
 </body>
 </html>
