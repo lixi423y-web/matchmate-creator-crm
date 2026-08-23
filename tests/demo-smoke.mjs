@@ -8,6 +8,7 @@ const collaborationIds = new Set(db.collaborations.map(row => row.id));
 
 assert.equal(db.creators.length, 1000, 'demo must contain 1,000 creators');
 assert.equal(creatorIds.size, db.creators.length, 'creator IDs must be unique');
+assert.ok(db.creators.every(row => typeof row.handle === 'string' && row.handle.trim()), 'demo creators must enforce the legacy non-null handle contract');
 assert.ok(db.collaborations.length >= 100, 'demo must exercise collaboration pagination');
 assert.ok(db.shipments.length >= 50, 'demo must exercise fulfillment queues');
 assert.ok(db.deliverables.length >= 100, 'demo must exercise deliverables');
@@ -28,23 +29,29 @@ globalThis.window = { MATCHMATE_CONFIG: {} };
 globalThis.location = { search: '?demo=1&size=1000' };
 const {
   normalizeWritePayload,
+  normalizeCreatorHandle,
   createCreatorWithPrimaryAccount,
+  saveCreatorAccount,
+  importCreators,
   createCollaborationFromOutreach,
   cancelCollaboration,
   creatorPage,
+  getOne,
   related
-} = await import('../src/data.js?demo-smoke=action-feedback');
+} = await import('../src/data.js?demo-smoke=handle-contract1');
 
 const normalized = normalizeWritePayload({ id: '', owner_id: '', campaign_id: '', display_name: 'Test' });
 assert.equal('id' in normalized, false, 'blank primary ID must be omitted so database defaults can apply');
 assert.equal(normalized.owner_id, null, 'blank optional owner UUID must be saved as null');
 assert.equal(normalized.campaign_id, null, 'blank optional campaign UUID must be saved as null');
 
-const handle = `creator_save_test_${Date.now()}`;
+const handle = `Creator_Save_Test_${Date.now()}`;
 const created = await createCreatorWithPrimaryAccount({
   creator: { display_name: '', owner_id: '' },
-  account: { handle, profile_url: '' }
+  account: { handle: `  @${handle}  `, profile_url: '' }
 });
+assert.equal(normalizeCreatorHandle(`  @${handle}  `), handle, 'handle normalization must trim whitespace and one leading @');
+assert.equal(created.handle, handle, 'legacy creators.handle must satisfy the production NOT NULL contract');
 assert.equal(created.display_name, handle, 'handle must be used when display name is omitted');
 assert.equal(created.owner_id, null, 'new creator may be saved without an owner');
 const newest = await creatorPage({ page: 1, pageSize: 1, sort: 'created_at.desc' });
@@ -61,6 +68,26 @@ await assert.rejects(
   /already in Creator database/,
   'duplicate Instagram handles must be blocked case-insensitively'
 );
+
+const renamedHandle = `${handle}_Renamed`;
+const updatedAccount = await saveCreatorAccount({ ...accounts[0], handle: ` @${renamedHandle} `, is_primary: true });
+assert.equal(updatedAccount.handle, renamedHandle, 'primary account edit must normalize its handle');
+assert.equal((await getOne('creators', created.id)).handle, renamedHandle, 'primary account edit must synchronize legacy creators.handle');
+
+const csvHandle = `csv_creator_${Date.now()}`;
+const csvImport = await importCreators([{
+  row: 2,
+  error: '',
+  creator: { display_name: 'CSV Creator' },
+  account: { platform: 'Instagram', handle: ` @${csvHandle} `, profile_url: '' }
+}], 'skip');
+assert.equal(csvImport.created, 1, 'CSV import must create a valid creator');
+assert.equal(csvImport.errors.length, 0, 'CSV import must not fail the legacy handle contract');
+const csvResult = await creatorPage({ page: 1, pageSize: 10, search: csvHandle, sort: 'created_at.desc' });
+const csvCreator = csvResult.data.find(row => row.handle === csvHandle);
+assert.ok(csvCreator, 'CSV creator must include legacy creators.handle');
+const csvAccounts = await related('creator_accounts', 'creator_id', csvCreator.id);
+assert.equal(csvAccounts[0].handle, csvHandle, 'CSV primary account and legacy creator handle must match');
 
 const collaboration = await createCollaborationFromOutreach(created.id, null);
 assert.equal(collaboration.creator_id, created.id, 'confirmed collaboration must belong to the creator');

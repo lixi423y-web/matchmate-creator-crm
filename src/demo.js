@@ -18,7 +18,7 @@ const products=[
 ];
 export function demoDatabase(size=1000){
   const creators=Array.from({length:size},(_,i)=>({
-    id:`creator-${i+1}`,creator_code:`CR-${String(i+1).padStart(5,'0')}`,display_name:`Creator ${i+1}`,nickname:`creator_${i+1}`,
+    id:`creator-${i+1}`,creator_code:`CR-${String(i+1).padStart(5,'0')}`,handle:`creator_${i+1}`,display_name:`Creator ${i+1}`,nickname:`creator_${i+1}`,
     location:i%7?'United States':'New York, United States',timezone:'America/New_York',languages:['English'],preferred_contact_method:'Instagram DM',contact_email:`creator${i+1}@example.com`,relationship_status:i%11===0?'Repeat Partner':'New',fit_verdict:FIT_VERDICTS[i%4],fit_notes:i%4===0?'Polished owner + pet content.':'Review recent feed.',tier:['A','B','C'][i%3],account_type:ACCOUNT_TYPES[i%4],appearance:i%3===0?'Human + Pet':'Human Only',dog_size:DOG_SIZES[i%4],source_group:i%2?'Benchmark brand':'Organic search',followers:400+(i*137)%9600,owner_id:i%2?'owner-ivy':'owner-team',tags:i%5===0?['fashion','repeat']:['seeding'],do_not_contact:false,created_at:new Date(2026,0,1+i%180).toISOString(),updated_at:new Date(2026,6,1+i%28).toISOString()
   }));
   const creator_accounts=creators.map((c,i)=>({id:`account-${i+1}`,creator_id:c.id,platform:'Instagram',handle:c.nickname,profile_url:`https://instagram.com/${c.nickname}`,followers:c.followers,is_primary:true}));

@@ -1,4 +1,4 @@
-import{demoDatabase}from'./demo.js?v=20260813-import1';
+import{demoDatabase}from'./demo.js?v=20260823-handle-contract1';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const demoMode=new URLSearchParams(location.search).get('demo')==='1'||!cfg.supabaseUrl||!cfg.supabaseAnonKey;
@@ -94,22 +94,23 @@ export async function creatorChoices(search=''){
   if(demoMode)return demo.creators.filter(row=>!search||JSON.stringify(row).toLowerCase().includes(search.toLowerCase())).slice(0,1000);
   return creatorPage({pageSize:1000,search,sort:'display_name.asc'}).then(result=>result.data);
 }
-function importKey(platform,handle){return`${String(platform||'Instagram').trim().toLowerCase()}|${String(handle||'').trim().replace(/^@/,'').toLowerCase()}`}
+export function normalizeCreatorHandle(value){return String(value||'').trim().replace(/^@/,'').trim()}
+function importKey(platform,handle){return`${String(platform||'Instagram').trim().toLowerCase()}|${normalizeCreatorHandle(handle).toLowerCase()}`}
 function nonEmpty(record){return Object.fromEntries(Object.entries(record||{}).filter(([,value])=>value!==''&&value!=null))}
 export async function existingCreatorAccounts(){
   if(demoMode)return demo.creator_accounts.filter(row=>!row.archived_at).map(row=>({...row}));
   const{data}=await request('creator_accounts?select=id,creator_id,platform,handle,profile_url,followers,is_primary,link_status&archived_at=is.null&limit=5000');return data||[];
 }
 export async function createCreatorWithPrimaryAccount({creator={},account={}}={}){
-  const handle=String(account.handle||'').replace(/^@/,'').trim();
+  const handle=normalizeCreatorHandle(account.handle);
   if(!handle)throw new Error('Instagram Handle is required.');
   const existing=await existingCreatorAccounts();
-  const duplicate=existing.find(item=>String(item.platform||'').toLowerCase()==='instagram'&&String(item.handle||'').replace(/^@/,'').trim().toLowerCase()===handle.toLowerCase());
+  const duplicate=existing.find(item=>String(item.platform||'').toLowerCase()==='instagram'&&normalizeCreatorHandle(item.handle).toLowerCase()===handle.toLowerCase());
   if(duplicate)throw new Error(`@${handle} is already in Creator database.`);
   const ownerId=creator.owner_id||null;
   let savedCreator=null,savedAccount=null,savedOutreach=null;
   try{
-    savedCreator=await save('creators',{...creator,display_name:String(creator.display_name||'').trim()||handle,nickname:String(creator.nickname||'').trim()||handle,relationship_status:creator.relationship_status||'New',owner_id:ownerId});
+    savedCreator=await save('creators',{...creator,handle,display_name:String(creator.display_name||'').trim()||handle,nickname:String(creator.nickname||'').trim()||handle,relationship_status:creator.relationship_status||'New',owner_id:ownerId});
     savedAccount=await save('creator_accounts',{creator_id:savedCreator.id,platform:'Instagram',handle,profile_url:String(account.profile_url||'').trim()||`https://www.instagram.com/${handle}/`,is_primary:true,link_status:'Not checked',owner_id:ownerId});
     savedOutreach=await save('outreach_records',{creator_id:savedCreator.id,status:'Not Contacted',channel:'Instagram DM',owner_id:ownerId});
     return savedCreator;
@@ -120,22 +121,35 @@ export async function createCreatorWithPrimaryAccount({creator={},account={}}={}
     throw error;
   }
 }
+export async function saveCreatorAccount(record={}){
+  const handle=normalizeCreatorHandle(record.handle);
+  if(!handle)throw new Error('Account Handle is required.');
+  const previous=record.id?await getOne('creator_accounts',record.id):null;
+  const saved=await save('creator_accounts',{...record,handle});
+  if(!saved.is_primary)return saved;
+  try{await save('creators',{id:saved.creator_id,handle});return saved}
+  catch(error){
+    try{if(previous)await save('creator_accounts',previous);else await remove('creator_accounts',saved.id)}
+    catch(rollbackError){console.error('Creator account rollback failed after legacy handle sync failure',rollbackError);throw new Error('The account was saved, but the creator handle could not be synchronized and automatic rollback failed. Refresh before editing again.')}
+    throw error;
+  }
+}
 export async function importCreators(rows,mode='skip'){
   const existing=await existingCreatorAccounts(),byKey=new Map(existing.map(account=>[importKey(account.platform,account.handle),account]));
   const result={created:0,updated:0,skipped:0,errors:[]};
   for(const row of rows){
     if(row.error){result.errors.push({row:row.row,message:row.error});continue}
-    const key=importKey(row.account.platform,row.account.handle),match=byKey.get(key);
+    const handle=normalizeCreatorHandle(row.account.handle),key=importKey(row.account.platform,handle),match=byKey.get(key);
     if(match&&mode==='skip'){result.skipped++;continue}
     try{
       if(match){
         await save('creators',{id:match.creator_id,...nonEmpty(row.creator)});
-        const account=await save('creator_accounts',{id:match.id,...nonEmpty(row.account)});byKey.set(key,account);result.updated++;continue;
+        const account=await saveCreatorAccount({id:match.id,...nonEmpty(row.account),handle});byKey.set(key,account);result.updated++;continue;
       }
       let creator,account;
       try{
-        creator=await save('creators',{...nonEmpty(row.creator),display_name:row.creator.display_name||row.account.handle,nickname:row.creator.nickname||row.account.handle,relationship_status:'New'});
-        account=await save('creator_accounts',{...nonEmpty(row.account),creator_id:creator.id,is_primary:true,link_status:row.account.link_status||'Not checked'});
+        creator=await save('creators',{...nonEmpty(row.creator),handle,display_name:row.creator.display_name||handle,nickname:row.creator.nickname||handle,relationship_status:'New'});
+        account=await save('creator_accounts',{...nonEmpty(row.account),handle,creator_id:creator.id,is_primary:true,link_status:row.account.link_status||'Not checked'});
         await save('outreach_records',{creator_id:creator.id,status:'Not Contacted',channel:String(row.account.platform||'Instagram').toLowerCase()==='instagram'?'Instagram DM':row.account.platform});
         byKey.set(key,account);result.created++;
       }catch(error){if(account?.id)try{await remove('creator_accounts',account.id)}catch{}if(creator?.id)try{await remove('creators',creator.id)}catch{}throw error}
