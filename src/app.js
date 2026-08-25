@@ -1,13 +1,36 @@
 import{OUTREACH_STATUSES,COLLABORATION_STAGES,FIT_VERDICTS,TIERS,ACCOUNT_TYPES,DOG_SIZES,RELATIONSHIPS,SHIPMENT_STATUSES,DELIVERABLE_STATUSES,PUBLICATION_STATUSES,RIGHTS_STATUSES,PAYMENT_STATUSES,DEFAULT_PAGE_SIZE,PAGE_SIZES,badgeClass}from'./constants.js?v=20260813-import1';
-import{dataMode,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,related,getOne,save,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,dashboardCounts,exportCreatorResults,exportCollaborationResults}from'./data.js?v=20260825-simple-flow3';
+import{dataMode,currentSession,restoreSession,signInWithPassword,signOut,onAuthStateChange,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,related,getOne,save,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,dashboardCounts,exportCreatorResults,exportCollaborationResults}from'./data.js?v=20260825-shared-auth1';
 
 const $=(selector,root=document)=>root.querySelector(selector);const $$=(selector,root=document)=>[...root.querySelectorAll(selector)];
 const CREATOR_SORT_DEFAULTS={display_name:'asc',primary_handle:'asc',created_at:'desc',last_contact_at:'desc',collaboration_count:'desc'};
 const state={view:'dashboard',creators:[],creatorCount:0,creatorPage:1,creatorPageSize:DEFAULT_PAGE_SIZE,creatorSort:'created_at.desc',creatorFilters:{},creatorSelection:new Set(),creatorImport:{rows:[],existing:[],mode:'skip'},collaborations:[],collaborationCount:0,collaborationPage:1,collaborationPageSize:DEFAULT_PAGE_SIZE,collaborationFilters:{},refs:{owners:[],campaigns:[],products:[],creatorOptions:[]},drawer:null,drawerTab:'profile',saving:false,actionBusy:false,draft:null,request:{creator:0,collaboration:0,detail:0,drawerRender:0}};
-let toastTimer;
+let toastTimer,appStarted=false;
 
 boot();
-async function boot(){bindStatic();$('#environmentBadge').textContent=dataMode==='demo'?'Demo 1,000':'Live';return openApp()}
+async function boot(){
+  bindStatic();bindAuth();$('#environmentBadge').textContent=dataMode==='demo'?'Demo 1,000':'Live';
+  try{
+    onAuthStateChange((event,nextSession)=>{if(event==='SIGNED_OUT'||!nextSession)showLogin()});
+    const existingSession=await restoreSession();if(existingSession)return openApp();showLogin();
+  }catch(error){console.error(error);showLogin('Unable to initialize secure login. Refresh and try again.')}
+}
+function bindAuth(){$('#loginForm').addEventListener('submit',login);$('#logoutBtn').addEventListener('click',logout)}
+async function login(event){
+  event.preventDefault();const email=$('#loginEmail').value.trim(),password=$('#loginPassword').value,button=$('#loginButton');
+  if(!email||!password)return showLoginError('Enter the shared account email and password.');
+  showLoginError('');button.disabled=true;button.textContent='Signing in…';
+  try{await signInWithPassword(email,password);$('#loginForm').reset();await openApp()}
+  catch(error){console.error(error);showLoginError('Email or password is incorrect.')}
+  finally{button.disabled=false;button.textContent='Sign in'}
+}
+async function logout(){const button=$('#logoutBtn');button.disabled=true;showLogin();try{await signOut()}catch(error){console.error(error);showLoginError('Signed out locally. Refresh before signing in again.')}finally{button.disabled=false}}
+function showLoginError(text){const error=$('#loginError');error.textContent=text;error.classList.toggle('hidden',!text)}
+function showLogin(error=''){appStarted=false;clearCrmData();$('#app').classList.add('hidden');$('#authGate').classList.remove('hidden');$('#loginPassword').value='';showLoginError(error)}
+function clearCrmData(){
+  state.creators=[];state.creatorCount=0;state.collaborations=[];state.collaborationCount=0;state.creatorSelection.clear();state.creatorImport={rows:[],existing:[],mode:'skip'};state.refs={owners:[],campaigns:[],products:[],creatorOptions:[]};state.drawer=null;state.draft=null;state.request.creator++;state.request.collaboration++;state.request.detail++;state.request.drawerRender++;
+  $('#drawer').classList.remove('open');$('#drawer').setAttribute('aria-hidden','true');for(const id of ['dashboardCards','bottleneckNote','outreachTasks','collaborationTasks','creatorProgress','productMix','creatorRows','creatorPagination','collaborationRows','collaborationPagination','drawerBody','drawerFooter']){const node=$(`#${id}`);if(node)node.textContent=''}
+  $('#creatorImportDialog').open&&$('#creatorImportDialog').close();$('#bulkDialog').open&&$('#bulkDialog').close();
+}
 function bindStatic(){
   $$('.nav-button').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.view)));
   $$('[data-go]').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.go)));
@@ -21,7 +44,7 @@ function bindStatic(){
   $$('[data-creator-sort]').forEach(button=>button.addEventListener('click',()=>setCreatorSort(button.dataset.creatorSort)));updateCreatorSortHeaders();$('#applyBulkBtn').addEventListener('click',applyBulkUpdate);$('#exportCreatorsBtn').addEventListener('click',exportCreators);$('#exportCollaborationsBtn').addEventListener('click',exportCollaborations);
   window.addEventListener('beforeunload',warnBeforeUnload);
 }
-async function openApp(){$('#app').classList.remove('hidden');setStatus('Loading');try{state.refs={...await referenceData(),creatorOptions:[]};fillStaticOptions();await loadDashboard();setStatus('Ready')}catch(error){handleError(error)}}
+async function openApp(){if(!currentSession())return showLogin();if(appStarted)return;appStarted=true;$('#authGate').classList.add('hidden');$('#app').classList.remove('hidden');setStatus('Loading');try{state.refs={...await referenceData(),creatorOptions:[]};fillStaticOptions();await loadDashboard();setStatus('Ready')}catch(error){handleError(error)}}
 function setView(view){if(!confirmDiscardChanges())return;if($('#drawer').classList.contains('open'))closeDrawer(true);state.view=view;$$('.nav-button').forEach(button=>button.classList.toggle('active',button.dataset.view===view));$$('.view').forEach(panel=>panel.classList.toggle('active',panel.id===`${view}View`));$('#pageTitle').textContent={dashboard:'Dashboard',creators:'Creators',collaborations:'Collaborations'}[view];if(view==='dashboard')loadDashboard();if(view==='creators')loadCreators();if(view==='collaborations')loadCollaborations()}
 function refreshView(){setStatus('Refreshing');return({dashboard:loadDashboard,creators:loadCreators,collaborations:loadCollaborations}[state.view]||loadDashboard)().finally(()=>setStatus('Ready'))}
 function fillStaticOptions(){
@@ -223,4 +246,4 @@ function showDrawerError(text){clearDrawerError();const node=document.createElem
 function saveErrorMessage(error){const text=message(error);if(/duplicate key|already exists/i.test(text))return text.includes('already in Creator database')?text:'This record already exists. Review its identifying fields and try again.';if(/not-null constraint/i.test(text))return'A required field is missing. Complete the highlighted field and try again.';if(/invalid input syntax for type uuid/i.test(text))return'One of the selected records is invalid. Clear the optional selection and try again.';if(/malformed array literal/i.test(text))return'Tags or languages could not be saved. Clear the field and enter comma-separated values.';if(/invalid input syntax for type (date|timestamp|numeric|integer)/i.test(text))return'A date or number is invalid. Clear the optional field or enter a valid value.';if(/check constraint/i.test(text))return'One of the values is outside the allowed range. Quantities must be at least 1.';return'Unable to save this record. Review the form and try again.'}
 async function runAction(button,statusText,work,{buttonText='Saving…',inlineError=true,afterSuccess=null}={}){if(state.actionBusy||state.saving||button?.disabled)return{ok:false,busy:true};const originalLabel=button?.textContent||'',scope=button?.closest('#drawer,dialog'),controls=scope?$$('button,input,select,textarea',scope):button?[button]:[],disabledStates=new Map(controls.map(control=>[control,control.disabled]));state.actionBusy=true;scope?.classList.add('action-busy');scope?.setAttribute('aria-busy','true');controls.forEach(control=>control.disabled=true);if(button)button.textContent=buttonText;if(inlineError&&state.drawer&&$('#drawer').classList.contains('open'))clearDrawerError();setStatus(statusText);try{const value=await work();if(afterSuccess)try{await afterSuccess(value)}catch(error){const friendly='The action was saved, but the latest view could not be refreshed. Do not repeat it; use Refresh.';if(inlineError&&state.drawer&&$('#drawer').classList.contains('open'))showDrawerError(friendly);handleError(error,friendly);return{ok:false,completed:true,value,error}}setStatus('Ready');return{ok:true,value}}catch(error){const friendly=saveErrorMessage(error);if(inlineError&&state.drawer&&$('#drawer').classList.contains('open'))showDrawerError(friendly);handleError(error,friendly);return{ok:false,error}}finally{state.actionBusy=false;scope?.classList.remove('action-busy');scope?.removeAttribute('aria-busy');disabledStates.forEach((disabled,control)=>{if(control.isConnected)control.disabled=disabled});if(button?.isConnected)button.textContent=originalLabel}}
 async function logActivitySafely(entry){try{await logActivity(entry);return false}catch(error){console.error('Activity log failed after the main action succeeded',error);return true}}
-function handleError(error,displayMessage=message(error)){console.error(error);setStatus('Error');toast(displayMessage);if(message(error).includes('session expired'))location.reload()}
+function handleError(error,displayMessage=message(error)){console.error(error);if(message(error).includes('session expired')){showLogin('Your session expired. Sign in again.');return}setStatus('Error');toast(displayMessage)}

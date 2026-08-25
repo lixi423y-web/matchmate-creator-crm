@@ -1,12 +1,24 @@
-import{demoDatabase}from'./demo.js?v=20260825-simple-flow3';
+import{demoDatabase}from'./demo.js?v=20260825-shared-auth1';
 
 const cfg=window.MATCHMATE_CONFIG||{};
-const demoMode=new URLSearchParams(location.search).get('demo')==='1'||!cfg.supabaseUrl||!cfg.supabaseAnonKey;
+const publishableKey=cfg.supabasePublishableKey||cfg.supabaseAnonKey||'';
+const demoMode=new URLSearchParams(location.search).get('demo')==='1'||!cfg.supabaseUrl||!publishableKey;
 const demo=demoMode?demoDatabase(Number(new URLSearchParams(location.search).get('size'))||1000):null;
 let session=null;
+let requestController=new AbortController();
+const supabase=cfg.supabaseUrl&&publishableKey&&window.supabase?.createClient?window.supabase.createClient(cfg.supabaseUrl,publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}):null;
 
 export const dataMode=demoMode?'demo':'live';
 export function currentSession(){return session}
+function requireAuthClient(){if(!supabase)throw new Error('CRM authentication is not configured.');return supabase}
+function setSession(nextSession){
+  if(!nextSession&&session){requestController.abort();requestController=new AbortController()}
+  session=nextSession||null;return session;
+}
+export async function restoreSession(){requireAuthClient();const{data,error}=await supabase.auth.getSession();if(error)throw error;return setSession(data.session)}
+export async function signInWithPassword(email,password){requireAuthClient();const{data,error}=await supabase.auth.signInWithPassword({email:String(email||'').trim(),password:String(password||'')});if(error)throw error;if(!data.session)throw new Error('No session was returned.');return setSession(data.session)}
+export async function signOut(){setSession(null);requireAuthClient();const{error}=await supabase.auth.signOut({scope:'local'});if(error)throw error}
+export function onAuthStateChange(callback){requireAuthClient();return supabase.auth.onAuthStateChange((event,nextSession)=>{setSession(nextSession);callback?.(event,nextSession)})}
 const UUID_FIELDS=new Set(['id','creator_id','campaign_id','collaboration_id','product_id','shipment_id','address_id','deliverable_id','publication_id','converted_collaboration_id','entity_id','created_by','owner_id']);
 const ARRAY_FIELDS=new Set(['languages','tags']);
 const DATE_FIELDS=new Set(['start_date','end_date','due_date','completed_at','last_contact_at','next_follow_up_at','due_at','shipped_at','delivered_at','published_at','archived_at']);
@@ -23,9 +35,10 @@ export function normalizeWritePayload(record={}){
   }
   return payload;
 }
-function headers(extra={}){return{apikey:cfg.supabaseAnonKey,Authorization:`Bearer ${cfg.supabaseAnonKey||''}`,'Content-Type':'application/json',...extra}}
+function headers(extra={}){if(!session?.access_token)throw new Error('session expired');return{apikey:publishableKey,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json',...extra}}
 async function request(path,options={}){
-  const response=await fetch(`${cfg.supabaseUrl}/rest/v1/${path}`,{...options,headers:headers(options.headers)});
+  const response=await fetch(`${cfg.supabaseUrl}/rest/v1/${path}`,{...options,signal:options.signal||requestController.signal,headers:headers(options.headers)});
+  if(response.status===401)throw new Error('session expired');
   if(!response.ok)throw new Error(await response.text());
   const text=await response.text();return{data:text?JSON.parse(text):null,count:parseCount(response.headers.get('content-range'))};
 }

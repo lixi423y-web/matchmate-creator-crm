@@ -54,3 +54,9 @@
 .draft-status{display:inline-flex;margin-top:7px;border-radius:999px;padding:4px 8px;background:var(--amber-2);color:var(--amber);font-size:11px;font-weight:750}
 @media(max-width:1250px){.metric-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:850px){.metric-grid,.dashboard-analysis,.product-groups,.import-controls{grid-template-columns:1fr}.handoff-banner,.packing-list{grid-template-columns:1fr}.bottleneck-note{align-items:flex-start;flex-direction:column;gap:3px}.pipeline-row{grid-template-columns:110px minmax(70px,1fr) 34px}.heading-actions{width:100%}.heading-actions button{flex:1}}
+
+/* Shared-account authentication gate. */
+.auth-brand small{color:var(--muted)}
+.auth-panel input{width:100%}
+.auth-panel button[type=submit]{width:100%;margin-top:8px}
+.auth-panel .form-error{margin:10px 0 0}

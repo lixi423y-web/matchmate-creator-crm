@@ -5,9 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Matchmate creator outreach and collaboration operations">
   <title>Matchmate Creator CRM</title>
-  <link rel="stylesheet" href="./styles.css?v=20260821-unsaved-guard1">
+  <link rel="stylesheet" href="./styles.css?v=20260825-shared-auth1">
 </head>
 <body>
+  <section id="authGate" class="auth-gate">
+    <form id="loginForm" class="auth-panel" novalidate>
+      <div class="brand-lockup auth-brand"><span class="brand-mark">M</span><div><strong>Matchmate</strong><small>Creator Operations</small></div></div>
+      <h1>Sign in</h1>
+      <p>Use the shared internal CRM account.</p>
+      <label>Email<input id="loginEmail" name="email" type="email" autocomplete="username" required></label>
+      <label>Password<input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
+      <p id="loginError" class="form-error hidden" role="alert"></p>
+      <button id="loginButton" type="submit">Sign in</button>
+    </form>
+  </section>
+
   <div id="app" class="app-shell hidden">
     <aside class="app-nav">
       <div class="brand-lockup"><span class="brand-mark">M</span><div><strong>Matchmate</strong><small>Creator Operations</small></div></div>
@@ -22,7 +34,7 @@
     <main class="app-main">
       <header class="topbar">
         <div><p class="eyebrow">Matchmate Growth</p><h1 id="pageTitle">Dashboard</h1></div>
-        <div class="top-actions"><span id="saveStatus" class="status-pill">Ready</span><button id="refreshBtn" class="secondary" type="button">Refresh</button></div>
+        <div class="top-actions"><span id="saveStatus" class="status-pill">Ready</span><button id="refreshBtn" class="secondary" type="button">Refresh</button><button id="logoutBtn" class="secondary" type="button">Logout</button></div>
       </header>
 
       <section id="dashboardView" class="view active">
@@ -88,7 +100,8 @@
   <dialog id="creatorImportDialog" class="import-dialog"><form method="dialog" class="dialog-form"><div class="section-head"><div><p class="eyebrow">Creator database</p><h2>Import creators</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p class="muted">Preview first. Importing creators never creates collaborations or overwrites shipping and history records.</p><div class="import-controls"><label>CSV file<input id="creatorCsvFile" type="file" accept=".csv,text/csv"></label><label>Existing accounts<select id="creatorImportMode"><option value="skip">Skip existing (recommended)</option><option value="update">Update non-empty profile fields</option></select></label></div><button id="downloadCreatorTemplateBtn" class="secondary compact template-button" type="button">Download CSV template</button><div id="creatorImportSummary" class="import-summary muted">Choose a CSV to preview.</div><div id="creatorImportPreview" class="import-preview"></div><menu><button value="cancel" class="secondary">Cancel</button><button id="confirmCreatorImportBtn" value="default" type="button" disabled>Import creators</button></menu></form></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./config.js?v=20260813-import1"></script>
-  <script type="module" src="./src/app.js?v=20260825-simple-flow3"></script>
+  <script type="module" src="./src/app.js?v=20260825-shared-auth1"></script>
 </body>
 </html>
