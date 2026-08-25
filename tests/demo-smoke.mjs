@@ -33,6 +33,7 @@ const {
   createCreatorWithPrimaryAccount,
   saveCreatorAccount,
   importCreators,
+  createOrderForCreator,
   createCollaborationFromOutreach,
   cancelCollaboration,
   creatorPage,
@@ -40,10 +41,17 @@ const {
   related
 } = await import('../src/data.js?demo-smoke=handle-contract1');
 
-const normalized = normalizeWritePayload({ id: '', owner_id: '', campaign_id: '', display_name: 'Test' });
+const normalized = normalizeWritePayload({ id: '', owner_id: '', campaign_id: '', tags: '', languages: '', due_date: '', next_follow_up_at: '', approved_budget: '', followers: '', quantity: '', display_name: 'Test' });
 assert.equal('id' in normalized, false, 'blank primary ID must be omitted so database defaults can apply');
 assert.equal(normalized.owner_id, null, 'blank optional owner UUID must be saved as null');
 assert.equal(normalized.campaign_id, null, 'blank optional campaign UUID must be saved as null');
+assert.deepEqual(normalized.tags, [], 'blank tags must be saved as an empty array');
+assert.deepEqual(normalized.languages, [], 'blank languages must be saved as an empty array');
+assert.equal(normalized.due_date, null, 'blank optional date must be saved as null');
+assert.equal(normalized.next_follow_up_at, null, 'blank optional timestamp must be saved as null');
+assert.equal(normalized.approved_budget, null, 'blank optional numeric value must be saved as null');
+assert.equal(normalized.followers, null, 'blank optional integer must be saved as null');
+assert.equal(normalized.quantity, 1, 'blank required quantity must use the safe default');
 
 const handle = `Creator_Save_Test_${Date.now()}`;
 const created = await createCreatorWithPrimaryAccount({
@@ -89,6 +97,15 @@ assert.ok(csvCreator, 'CSV creator must include legacy creators.handle');
 const csvAccounts = await related('creator_accounts', 'creator_id', csvCreator.id);
 assert.equal(csvAccounts[0].handle, csvHandle, 'CSV primary account and legacy creator handle must match');
 
+const quickOrder = await createOrderForCreator(created.id, null);
+assert.equal(quickOrder.creator_id, created.id, 'quick order must belong to the creator');
+assert.equal(quickOrder.type, 'Seeding', 'quick order must use the default collaboration type');
+assert.equal(quickOrder.stage, 'Confirmed — Awaiting Details', 'quick order must start in the details-pending stage');
+assert.equal(quickOrder.rights_status, 'Not Discussed', 'quick order must use a safe rights default');
+assert.equal(quickOrder.payment_status, 'Gifted', 'quick order must use the default gifted payment status');
+assert.match(quickOrder.start_date, /^\d{4}-\d{2}-\d{2}$/, 'quick order must receive today as its start date');
+assert.equal((await related('outreach_records', 'creator_id', created.id))[0].converted_collaboration_id, undefined, 'ordinary repeat orders must not rewrite outreach conversion history');
+
 const collaboration = await createCollaborationFromOutreach(created.id, null);
 assert.equal(collaboration.creator_id, created.id, 'confirmed collaboration must belong to the creator');
 const convertedOutreach = await related('outreach_records', 'creator_id', created.id);
@@ -109,8 +126,16 @@ for (const token of [
   "window.addEventListener('beforeunload',warnBeforeUnload)",
   'function closeDrawer(force=false)',
   'discardChangesThen(()=>onClick(tab))',
-  "renderCollaborationDrawer(editing&&tab==='overview')"
+  'async function createQuickOrder(creator,button)',
+  "Everything else can be added later.",
+  "Products, address, due date and all other details can be added later.",
+  "tabs=c.id?",
+  "editing=editing||!c.id"
 ]) assert.ok(appSource.includes(token), `unsaved-change guard must include ${token}`);
+assert.ok(!appSource.includes("renderCollaborationDrawer(editing&&tab==='overview')"), 'new order tab changes must not discard editing state');
+assert.ok(!appSource.includes("field('display_name','Display Name (optional)'"), 'new creator form must require only the Instagram Handle');
+assert.ok(appSource.includes("type==='creator'?'Add creator':'Create order'"), 'the primary order action must use plain order language');
+assert.ok(indexSource.includes('id="newCollaborationBtn" type="button">Create order</button>'), 'the global order action must use plain order language');
 assert.ok(indexSource.includes('id="drawerDraftStatus"'), 'drawer must show an unsaved-change indicator');
 
 console.log(JSON.stringify({

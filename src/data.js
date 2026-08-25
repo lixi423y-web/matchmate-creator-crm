@@ -1,4 +1,4 @@
-import{demoDatabase}from'./demo.js?v=20260823-handle-contract1';
+import{demoDatabase}from'./demo.js?v=20260825-simple-flow3';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const demoMode=new URLSearchParams(location.search).get('demo')==='1'||!cfg.supabaseUrl||!cfg.supabaseAnonKey;
@@ -8,9 +8,19 @@ let session=null;
 export const dataMode=demoMode?'demo':'live';
 export function currentSession(){return session}
 const UUID_FIELDS=new Set(['id','creator_id','campaign_id','collaboration_id','product_id','shipment_id','address_id','deliverable_id','publication_id','converted_collaboration_id','entity_id','created_by','owner_id']);
+const ARRAY_FIELDS=new Set(['languages','tags']);
+const DATE_FIELDS=new Set(['start_date','end_date','due_date','completed_at','last_contact_at','next_follow_up_at','due_at','shipped_at','delivered_at','published_at','archived_at']);
+const NUMBER_FIELDS=new Set(['followers','engagement_rate','neck_size_cm','weight_kg','budget','inventory_quantity','reserved_quantity','approved_budget','quantity','views','likes','comments','shares','saves','quantity_delta']);
 export function normalizeWritePayload(record={}){
   const payload={...record};delete payload._meta;
   for(const key of UUID_FIELDS){if(key in payload&&typeof payload[key]==='string'&&!payload[key].trim()){if(key==='id')delete payload[key];else payload[key]=null}}
+  for(const key of ARRAY_FIELDS){if(key in payload&&payload[key]==='')payload[key]=[]}
+  for(const key of DATE_FIELDS){if(key in payload&&payload[key]==='')payload[key]=null}
+  for(const key of NUMBER_FIELDS){
+    if(!(key in payload))continue;
+    if(payload[key]===''){payload[key]=key==='quantity'?1:null;continue}
+    if(typeof payload[key]==='string')payload[key]=Number(payload[key]);
+  }
   return payload;
 }
 function headers(extra={}){return{apikey:cfg.supabaseAnonKey,Authorization:`Bearer ${cfg.supabaseAnonKey||''}`,'Content-Type':'application/json',...extra}}
@@ -157,10 +167,14 @@ export async function importCreators(rows,mode='skip'){
   }
   return result;
 }
+export async function createOrderForCreator(creatorId,ownerId=null){
+  if(!creatorId)throw new Error('Choose a creator before creating an order.');
+  return save('collaborations',{creator_id:creatorId,type:'Seeding',stage:'Confirmed — Awaiting Details',rights_status:'Not Discussed',payment_status:'Gifted',owner_id:ownerId||null,start_date:new Date().toISOString().slice(0,10),is_repeat:false});
+}
 export async function createCollaborationFromOutreach(creatorId,ownerId){
   let collaboration=null;
   try{
-    collaboration=await save('collaborations',{creator_id:creatorId,type:'Seeding',stage:'Confirmed — Awaiting Details',owner_id:ownerId,start_date:new Date().toISOString().slice(0,10),is_repeat:false});
+    collaboration=await createOrderForCreator(creatorId,ownerId);
     const outreach=(await related('outreach_records','creator_id',creatorId))[0];
     if(outreach)await save('outreach_records',{id:outreach.id,status:'Converted',converted_collaboration_id:collaboration.id});
     return collaboration;
