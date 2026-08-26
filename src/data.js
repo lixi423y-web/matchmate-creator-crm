@@ -35,6 +35,18 @@ export function normalizeWritePayload(record={}){
   }
   return payload;
 }
+export function creatorAddressSnapshot(address={}){
+  const fullAddress=String(address.full_address||'').trim();
+  if(!fullAddress)return{};
+  return{
+    label:String(address.label||'').trim()||null,
+    recipient_name:String(address.recipient_name||'').trim()||null,
+    phone:String(address.phone||'').trim()||null,
+    country:String(address.country||'').trim()||null,
+    full_address:fullAddress,
+    source:'creator_addresses'
+  };
+}
 function headers(extra={}){if(!session?.access_token)throw new Error('session expired');return{apikey:publishableKey,Authorization:`Bearer ${session.access_token}`,'Content-Type':'application/json',...extra}}
 async function request(path,options={}){
   const response=await fetch(`${cfg.supabaseUrl}/rest/v1/${path}`,{...options,signal:options.signal||requestController.signal,headers:headers(options.headers)});

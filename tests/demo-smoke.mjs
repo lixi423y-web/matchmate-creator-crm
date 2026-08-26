@@ -29,6 +29,7 @@ globalThis.window = { MATCHMATE_CONFIG: {} };
 globalThis.location = { search: '?demo=1&size=1000' };
 const {
   normalizeWritePayload,
+  creatorAddressSnapshot,
   normalizeCreatorHandle,
   createCreatorWithPrimaryAccount,
   saveCreatorAccount,
@@ -36,6 +37,7 @@ const {
   createOrderForCreator,
   createCollaborationFromOutreach,
   cancelCollaboration,
+  save,
   creatorPage,
   getOne,
   related
@@ -106,6 +108,40 @@ assert.equal(quickOrder.payment_status, 'Gifted', 'quick order must use the defa
 assert.match(quickOrder.start_date, /^\d{4}-\d{2}-\d{2}$/, 'quick order must receive today as its start date');
 assert.equal((await related('outreach_records', 'creator_id', created.id))[0].converted_collaboration_id, undefined, 'ordinary repeat orders must not rewrite outreach conversion history');
 
+const savedAddress = await save('creator_addresses', {
+  creator_id: created.id,
+  label: 'Shipping address',
+  recipient_name: 'Demo recipient',
+  full_address: '123 Demo Street, New York, NY 10001',
+  phone: '000-000-0000',
+  country: 'United States',
+  is_default: true
+});
+const addressSnapshot = creatorAddressSnapshot(savedAddress);
+assert.deepEqual(addressSnapshot, {
+  label: 'Shipping address',
+  recipient_name: 'Demo recipient',
+  phone: '000-000-0000',
+  country: 'United States',
+  full_address: '123 Demo Street, New York, NY 10001',
+  source: 'creator_addresses'
+}, 'shipment draft must copy the creator address without retyping it');
+assert.deepEqual(creatorAddressSnapshot({}), {}, 'a shipment draft may be saved before an address is known');
+const shipmentDraft = await save('shipments', {
+  collaboration_id: quickOrder.id,
+  status: 'Draft',
+  owner_id: '',
+  address_id: savedAddress.id,
+  address_snapshot: addressSnapshot,
+  tracking_url: '',
+  shipped_at: '',
+  delivered_at: ''
+});
+assert.equal(shipmentDraft.status, 'Draft', 'shipment may be saved immediately as a draft');
+assert.equal(shipmentDraft.address_id, savedAddress.id, 'shipment must retain the source creator address');
+assert.equal(shipmentDraft.shipped_at, null, 'blank shipment dates must save as null');
+assert.equal(shipmentDraft.delivered_at, null, 'blank delivery dates must save as null');
+
 const collaboration = await createCollaborationFromOutreach(created.id, null);
 assert.equal(collaboration.creator_id, created.id, 'confirmed collaboration must belong to the creator');
 const convertedOutreach = await related('outreach_records', 'creator_id', created.id);
@@ -137,6 +173,14 @@ assert.ok(!appSource.includes("field('display_name','Display Name (optional)'"),
 assert.ok(appSource.includes("type==='creator'?'Add creator':'Create order'"), 'the primary order action must use plain order language');
 assert.ok(indexSource.includes('id="newCollaborationBtn" type="button">Create order</button>'), 'the global order action must use plain order language');
 assert.ok(indexSource.includes('id="drawerDraftStatus"'), 'drawer must show an unsaved-change indicator');
+assert.ok(appSource.includes("related('creator_addresses','creator_id',c.creator_id)"), 'shipment tab must load the creator address automatically');
+assert.ok(appSource.includes("body.innerHTML=context+relatedEditorForm('shipments',record,false)"), 'an empty shipment tab must open the draft form without an Add click');
+assert.ok(appSource.includes("relatedEditorForm('deliverables',record,false)"), 'an empty deliverables tab must open the form without an Add click');
+assert.ok(appSource.includes("payload.type=payload.type.trim()||'TBD'"), 'a deliverable placeholder must remain savable before details are known');
+assert.ok(appSource.includes("payload.address_snapshot=fullAddress?"), 'shipment save must accept an empty draft address');
+assert.ok(appSource.includes('Shipping Address (optional for Draft)'), 'shipment address must be visibly optional while the record is a draft');
+assert.ok(!appSource.includes("textarea('address_snapshot','Full Shipping Address'"), 'shipment must not require retyping the full address');
+assert.ok(!appSource.includes("invalid.reportValidity()"), 'invalid fields must use the visible drawer error instead of a silent native tooltip');
 
 console.log(JSON.stringify({
   creators: db.creators.length,
