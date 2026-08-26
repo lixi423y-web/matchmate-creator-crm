@@ -1,6 +1,6 @@
 # Shared Supabase Auth rollout
 
-This change replaces the public shared-link data path with one manually managed Supabase email/password account. It does not add registration, roles, invitations, or a service-role key.
+This change replaces the public shared-link data path with one manually managed Supabase email/password account. RLS is restricted to Auth User UUID `cffc1b76-6bc9-4f0c-9df9-569eb37970c3`; other authenticated users remain unable to read or change CRM data. It does not add registration, roles, invitations, or a service-role key.
 
 ## Before the maintenance window
 
@@ -29,7 +29,7 @@ Do not run any SQL until this change set is approved.
 2. In a short maintenance window, publish the reviewed Auth frontend commit. Confirm a signed-out/private window shows only the login page and makes no CRM REST requests.
 3. Run the complete `20260826063626_authenticated_crm_access.sql` file once. It is wrapped in a transaction and changes grants/RLS policies only.
 4. Run the same count query again. Every result must equal the pre-cutover result.
-5. Check that each listed table has `crm authenticated access`, that `crm shared link access` is absent, and that `anon` has no table or view grants.
+5. Check that each listed table has `crm shared account access`, that legacy shared-link and unrestricted authenticated policies are absent, and that `anon` has no table or view grants.
 6. Complete the authenticated and anonymous tests below before ending the maintenance window.
 
 The frontend-first ordering keeps the login experience testable before the policy cutover. Keep the gap between steps 2 and 3 as short as possible because direct anonymous REST access remains possible until step 3 finishes. If zero exposure time is more important than a brief outage, reverse steps 2 and 3; the old frontend will be unavailable until the Auth frontend is published.

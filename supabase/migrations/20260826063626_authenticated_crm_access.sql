@@ -1,4 +1,4 @@
--- Replace temporary shared-link access with one authenticated CRM boundary.
+-- Replace temporary shared-link access with one shared Auth user boundary.
 -- This migration changes grants and RLS policies only. It contains no data writes.
 -- Review first, then run manually in the Supabase SQL Editor during the approved cutover.
 
@@ -8,7 +8,9 @@ do $$
 declare
   table_name text;
   policy_name text;
+  shared_crm_user_id constant uuid := 'cffc1b76-6bc9-4f0c-9df9-569eb37970c3';
   anon_role_oid oid := (select oid from pg_roles where rolname = 'anon');
+  authenticated_role_oid oid := (select oid from pg_roles where rolname = 'authenticated');
 begin
   foreach table_name in array array[
     'crm_users','creators','creator_accounts','creator_pets','creator_addresses',
@@ -19,21 +21,27 @@ begin
     execute format('alter table public.%I enable row level security', table_name);
     execute format('drop policy if exists "crm shared link access" on public.%I', table_name);
 
-    -- Remove any other policy that still targets anon or PUBLIC. This prevents a
-    -- differently named legacy policy from restoring anonymous access later.
+    -- Remove every legacy policy that targets anon, authenticated or PUBLIC.
+    -- PostgreSQL combines permissive policies with OR, so leaving even one old
+    -- unrestricted policy would reopen the table to other Auth users.
     for policy_name in
       select polname
       from pg_policy
       where polrelid = to_regclass('public.' || table_name)
-        and (polroles @> array[anon_role_oid] or polroles @> array[0::oid])
+        and (
+          polroles @> array[anon_role_oid]
+          or polroles @> array[authenticated_role_oid]
+          or polroles @> array[0::oid]
+        )
     loop
       execute format('drop policy if exists %I on public.%I', policy_name, table_name);
     end loop;
 
-    execute format('drop policy if exists "crm authenticated access" on public.%I', table_name);
     execute format(
-      'create policy "crm authenticated access" on public.%I for all to authenticated using (true) with check (true)',
-      table_name
+      'create policy "crm shared account access" on public.%I for all to authenticated using (auth.uid() = %L::uuid) with check (auth.uid() = %L::uuid)',
+      table_name,
+      shared_crm_user_id,
+      shared_crm_user_id
     );
   end loop;
 end $$;

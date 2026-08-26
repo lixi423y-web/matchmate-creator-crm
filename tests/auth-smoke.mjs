@@ -75,6 +75,10 @@ const indexSource = await readFile(new URL('../index.html', import.meta.url), 'u
 const appSource = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
 const dataSource = await readFile(new URL('../src/data.js', import.meta.url), 'utf8');
 const migration = await readFile(new URL('../supabase/migrations/20260826063626_authenticated_crm_access.sql', import.meta.url), 'utf8');
+const schemaMigration = await readFile(new URL('../supabase/migrations/001_crm_v2_additive_schema.sql', import.meta.url), 'utf8');
+const sharedCrmUserId = 'cffc1b76-6bc9-4f0c-9df9-569eb37970c3';
+const otherAuthenticatedUserId = '11111111-1111-4111-8111-111111111111';
+const normalizedMigration = migration.replace(/\s+/g, ' ').toLowerCase();
 
 assert.ok(indexSource.includes('id="authGate"'), 'the signed-out page must contain the login gate');
 assert.ok(indexSource.includes('id="app" class="app-shell hidden"'), 'the CRM app must start hidden');
@@ -95,10 +99,23 @@ const requiredTables = [
 for (const table of requiredTables) assert.ok(migration.includes(`'${table}'`) || migration.includes(`public.${table}`), `migration must cover ${table}`);
 assert.ok(migration.includes('drop policy if exists "crm shared link access"'), 'migration must remove shared-link policies');
 assert.ok(migration.includes('from anon'), 'migration must revoke anon table privileges');
+assert.match(normalizedMigration, /revoke select,insert,update,delete on .*public\.creators.* from anon;/, 'anon must lose creators CRUD privileges');
+assert.match(normalizedMigration, /revoke select,insert,update,delete on .*public\.creator_addresses.* from anon;/, 'anon must lose creator_addresses CRUD privileges');
 assert.ok(migration.includes('to authenticated'), 'migration must grant authenticated CRM access');
 assert.ok(migration.includes('public.creator_directory,public.collaboration_directory from anon'), 'migration must revoke anon view access');
+assert.ok(migration.includes(`shared_crm_user_id constant uuid := '${sharedCrmUserId}'`), 'migration must bind access to the selected shared CRM user');
+assert.ok(migration.includes('polroles @> array[authenticated_role_oid]'), 'migration must remove legacy policies available to all authenticated users');
+assert.ok(migration.includes('using (auth.uid() = %L::uuid) with check (auth.uid() = %L::uuid)'), 'read and write policies must require the selected Auth UUID');
+assert.ok(!/using\s*\(true\)|with\s+check\s*\(true\)/i.test(migration), 'migration must not allow every authenticated user');
+assert.ok(schemaMigration.includes('view public.creator_directory with (security_invoker=true)'), 'creator directory must honor base-table RLS');
+assert.ok(schemaMigration.includes('view public.collaboration_directory with (security_invoker=true)'), 'collaboration directory must honor base-table RLS');
 assert.ok(!/\b(delete\s+from|truncate|drop\s+table)\b/i.test(migration), 'security migration must not delete CRM data or tables');
 assert.ok(!/service[_-]?role/i.test(migration), 'security migration must not reference service-role access');
+
+const policyAllows = userId => userId === sharedCrmUserId;
+assert.equal(policyAllows(null), false, 'anon must be rejected by the CRM policy');
+assert.equal(policyAllows(sharedCrmUserId), true, 'the selected shared CRM user must pass RLS');
+assert.equal(policyAllows(otherAuthenticatedUserId), false, 'another authenticated user must be rejected by RLS');
 
 console.log(JSON.stringify({
   unauthenticatedRequests: 0,
@@ -106,5 +123,8 @@ console.log(JSON.stringify({
   sessionRestored: true,
   sessionBearerVerified: true,
   logoutBlocksReads: true,
+  anonymousRlsBlocked: true,
+  sharedAccountRlsAllowed: true,
+  otherAuthenticatedUserRlsBlocked: true,
   migrationContractVerified: true
 }));
