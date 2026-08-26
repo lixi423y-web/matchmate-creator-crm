@@ -74,7 +74,7 @@ assert.equal(fetchCalls.length, 1, 'logout must not send another CRM REST reques
 const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const appSource = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
 const dataSource = await readFile(new URL('../src/data.js', import.meta.url), 'utf8');
-const migration = await readFile(new URL('../supabase/migrations/007_authenticated_crm_access.sql', import.meta.url), 'utf8');
+const migration = await readFile(new URL('../supabase/migrations/20260826063626_authenticated_crm_access.sql', import.meta.url), 'utf8');
 
 assert.ok(indexSource.includes('id="authGate"'), 'the signed-out page must contain the login gate');
 assert.ok(indexSource.includes('id="app" class="app-shell hidden"'), 'the CRM app must start hidden');

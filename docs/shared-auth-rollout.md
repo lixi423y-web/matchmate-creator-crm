@@ -4,7 +4,7 @@ This change replaces the public shared-link data path with one manually managed 
 
 ## Before the maintenance window
 
-1. Review the frontend, `tests/auth-smoke.mjs`, and `supabase/migrations/007_authenticated_crm_access.sql`.
+1. Review the frontend, `tests/auth-smoke.mjs`, and `supabase/migrations/20260826063626_authenticated_crm_access.sql`.
 2. Confirm the target project is `kcibsvltzcjpnuqnzfld`.
 3. In Supabase Dashboard, open **Authentication > Users > Add user** and create the shared internal email/password user. Use the Dashboard option to mark the email confirmed.
 4. Under the Email provider/Auth settings, keep email/password sign-in enabled and disable public user sign-ups. The CRM intentionally has no Sign Up or Create Account control.
@@ -27,7 +27,7 @@ Do not run any SQL until this change set is approved.
    ```
 
 2. In a short maintenance window, publish the reviewed Auth frontend commit. Confirm a signed-out/private window shows only the login page and makes no CRM REST requests.
-3. Run the complete `007_authenticated_crm_access.sql` file once. It is wrapped in a transaction and changes grants/RLS policies only.
+3. Run the complete `20260826063626_authenticated_crm_access.sql` file once. It is wrapped in a transaction and changes grants/RLS policies only.
 4. Run the same count query again. Every result must equal the pre-cutover result.
 5. Check that each listed table has `crm authenticated access`, that `crm shared link access` is absent, and that `anon` has no table or view grants.
 6. Complete the authenticated and anonymous tests below before ending the maintenance window.
@@ -69,14 +69,8 @@ The password and access token must never be copied into source control or the ro
 
 Preferred rollback keeps the database locked to authenticated users:
 
-1. Stop the rollout and leave `007_authenticated_crm_access.sql` in place.
+1. Stop the rollout and leave `20260826063626_authenticated_crm_access.sql` in place.
 2. Fix or revert the Auth frontend on a review branch, retest login, then publish the corrected frontend.
 3. Do not deploy the old anonymous frontend while `007` is active; it cannot access CRM data and will show errors.
 
-Emergency availability rollback reopens the original security exposure and requires explicit approval:
-
-1. Re-run the existing `supabase/migrations/005_shared_link_access.sql` to restore `anon` policies/grants.
-2. Revert the frontend to the prior known-good commit and publish it.
-3. Record the anonymous-access window and schedule a new Auth cutover immediately.
-
-This emergency path does not delete data, but it again allows anyone with the public project configuration to read and edit CRM records. It should not be used as the normal rollback.
+Do not run `005_shared_link_access.sql` as a rollback. Restoring anonymous access would reopen creator, address, shipment and history data. Keep the authenticated database boundary in place, fix the frontend on the review branch, and redeploy only after the login flow passes again.
