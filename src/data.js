@@ -21,10 +21,39 @@ export async function signOut(){setSession(null);requireAuthClient();const{error
 export function onAuthStateChange(callback){requireAuthClient();return supabase.auth.onAuthStateChange((event,nextSession)=>{setSession(nextSession);callback?.(event,nextSession)})}
 const UUID_FIELDS=new Set(['id','creator_id','campaign_id','collaboration_id','product_id','shipment_id','address_id','deliverable_id','publication_id','converted_collaboration_id','entity_id','created_by','owner_id']);
 const ARRAY_FIELDS=new Set(['languages','tags']);
-const DATE_FIELDS=new Set(['start_date','end_date','due_date','completed_at','last_contact_at','next_follow_up_at','due_at','shipped_at','delivered_at','published_at','archived_at']);
-const NUMBER_FIELDS=new Set(['followers','engagement_rate','neck_size_cm','weight_kg','budget','inventory_quantity','reserved_quantity','approved_budget','quantity','views','likes','comments','shares','saves','quantity_delta']);
-export function normalizeWritePayload(record={}){
-  const payload={...record};delete payload._meta;
+const DATE_FIELDS=new Set(['start_date','end_date','due_date','completed_at','last_contact_at','next_follow_up_at','last_verified_at','due_at','shipped_at','delivered_at','published_at','last_metrics_at','archived_at']);
+const NUMBER_FIELDS=new Set(['followers','engagement_rate','neck_size_cm','weight_kg','budget','inventory_quantity','reserved_quantity','approved_budget','quantity','views','likes','comments','shares','saves','quantity_delta','file_size_bytes']);
+const TABLE_WRITE_FIELDS={
+  creators:['id','handle','display_name','legal_name','nickname','timezone','languages','preferred_contact_method','contact_email','contact_phone','preferred_channel','relationship_status','fit_verdict','tier','account_type','appearance','dog_size','fit_notes','tags','do_not_contact','owner_id','created_by','archived_at','location','source_group','source_detail','followers','notes','database_notes'],
+  creator_accounts:['id','creator_id','platform','handle','profile_url','followers','engagement_rate','is_primary','link_status','last_verified_at','created_by','owner_id','archived_at'],
+  creator_pets:['id','creator_id','name','breed','size','neck_size_cm','weight_kg','fit_notes','created_by','owner_id','archived_at'],
+  creator_addresses:['id','creator_id','label','recipient_name','full_address','phone','country','is_default','created_by','owner_id','archived_at'],
+  outreach_records:['id','creator_id','status','channel','last_contact_at','next_follow_up_at','notes','message_summary','conversation_url','converted_collaboration_id','created_by','owner_id','archived_at'],
+  collaborations:['id','creator_id','campaign_id','collaboration_name','type','stage','start_date','due_date','completed_at','rights_status','payment_status','approved_budget','is_repeat','notes','created_by','owner_id','archived_at'],
+  collaboration_products:['id','collaboration_id','product_id','quantity','is_primary','notes','created_by','owner_id','archived_at'],
+  deliverables:['id','collaboration_id','type','platform','quantity','status','due_at','brief_url','notes','created_by','owner_id','archived_at'],
+  shipments:['id','collaboration_id','status','carrier','service_level','tracking_number','tracking_url','address_id','address_snapshot','shipped_at','delivered_at','exception_notes','created_by','owner_id','archived_at'],
+  publications:['id','collaboration_id','deliverable_id','platform','format','url','status','published_at','views','likes','comments','shares','saves','last_metrics_at','notes','created_by','owner_id','archived_at'],
+  assets:['id','collaboration_id','deliverable_id','publication_id','asset_type','file_name','storage_path','external_url','mime_type','file_size_bytes','usage_notes','rights_status','created_by','owner_id','archived_at'],
+  activity_logs:['id','entity_type','entity_id','collaboration_id','creator_id','action','before_data','after_data','note','created_by','owner_id','archived_at']
+};
+const NULLABLE_TEXT_FIELDS={
+  creators:['legal_name','nickname','timezone','preferred_contact_method','contact_email','contact_phone','preferred_channel','fit_verdict','tier','account_type','appearance','dog_size','fit_notes','location','source_group','source_detail','notes','database_notes'],
+  creator_accounts:['profile_url','link_status'],creator_pets:['name','breed','size','fit_notes'],creator_addresses:['label','recipient_name','phone','country'],
+  outreach_records:['channel','notes','message_summary','conversation_url'],collaborations:['collaboration_name','notes'],collaboration_products:['notes'],
+  deliverables:['type','platform','brief_url','notes'],shipments:['carrier','service_level','tracking_number','tracking_url','exception_notes'],
+  publications:['format','url','notes'],assets:['asset_type','file_name','storage_path','external_url','mime_type','usage_notes','rights_status'],activity_logs:['note']
+};
+const SAFE_DEFAULTS={
+  creator_accounts:{platform:'Instagram',is_primary:false},creator_addresses:{is_default:false},outreach_records:{status:'Not Contacted'},
+  collaborations:{type:'Seeding',stage:'Confirmed — Awaiting Details',rights_status:'Not Discussed',payment_status:'Gifted',is_repeat:false},
+  collaboration_products:{quantity:1,is_primary:false},deliverables:{quantity:1,status:'Pending'},shipments:{status:'Draft',address_snapshot:{}},
+  publications:{platform:'Instagram',status:'Planned'}
+};
+export function writableFieldsFor(table){return[...(TABLE_WRITE_FIELDS[table]||[])]}
+export function normalizeWritePayload(record={},table=''){
+  const allowed=TABLE_WRITE_FIELDS[table],payload=allowed?Object.fromEntries(Object.entries(record).filter(([key])=>allowed.includes(key))):{...record};delete payload._meta;
+  const isUpdate=Boolean(payload.id);
   for(const key of UUID_FIELDS){if(key in payload&&typeof payload[key]==='string'&&!payload[key].trim()){if(key==='id')delete payload[key];else payload[key]=null}}
   for(const key of ARRAY_FIELDS){if(key in payload&&payload[key]==='')payload[key]=[]}
   for(const key of DATE_FIELDS){if(key in payload&&payload[key]==='')payload[key]=null}
@@ -33,6 +62,8 @@ export function normalizeWritePayload(record={}){
     if(payload[key]===''){payload[key]=key==='quantity'?1:null;continue}
     if(typeof payload[key]==='string')payload[key]=Number(payload[key]);
   }
+  for(const key of NULLABLE_TEXT_FIELDS[table]||[]){if(key in payload&&typeof payload[key]==='string'&&!payload[key].trim())payload[key]=null}
+  if(!isUpdate)for(const[key,value]of Object.entries(SAFE_DEFAULTS[table]||{})){if(!(key in payload)||payload[key]===''||payload[key]==null)payload[key]=value}
   return payload;
 }
 export function creatorAddressSnapshot(address={}){
@@ -93,7 +124,7 @@ export async function related(table,column,id,select='*'){
   const{data}=await request(`${table}?${column}=eq.${encodeURIComponent(id)}&archived_at=is.null&select=${encodeURIComponent(select)}&order=created_at.desc`);return data||[];
 }
 export async function save(table,record){
-  const payload=normalizeWritePayload(record);
+  const payload=normalizeWritePayload(record,table);
   if(demoMode){const rows=demo[table]||(demo[table]=[]);const index=rows.findIndex(row=>row.id===payload.id);if(index>=0)rows[index]={...rows[index],...payload,updated_at:new Date().toISOString()};else rows.unshift({...payload,id:payload.id||crypto.randomUUID(),created_at:new Date().toISOString(),updated_at:new Date().toISOString()});return index>=0?rows[index]:rows[0]}
   if(payload.id){const id=payload.id;delete payload.id;const{data}=await request(`${table}?id=eq.${encodeURIComponent(id)}&select=*`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return data?.[0]}
   const{data}=await request(`${table}?select=*`,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return data?.[0];

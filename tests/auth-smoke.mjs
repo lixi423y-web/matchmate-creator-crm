@@ -85,6 +85,7 @@ assert.ok(indexSource.includes('id="app" class="app-shell hidden"'), 'the CRM ap
 assert.ok(indexSource.includes('id="logoutBtn"'), 'the authenticated header must include Logout');
 assert.ok(!/sign\s*up|create account/i.test(indexSource), 'the frontend must not expose registration');
 assert.ok(appSource.includes('await restoreSession()'), 'app boot must restore a persisted session before loading CRM data');
+assert.ok(!appSource.includes("if(dataMode==='demo')return openApp()"), 'query parameters must not bypass the signed-out login gate');
 assert.ok(appSource.includes("onAuthStateChange((event,nextSession)"), 'the app must react to Supabase sign-out state');
 assert.ok(dataSource.includes('.auth.signInWithPassword('), 'login must use Supabase signInWithPassword');
 assert.ok(dataSource.includes('Authorization:`Bearer ${session.access_token}`'), 'REST Bearer auth must use the session access token');
