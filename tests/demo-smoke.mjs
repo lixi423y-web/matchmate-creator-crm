@@ -178,7 +178,7 @@ for (const token of [
   "beginDraftGuard(title.toLowerCase(),$('#relatedForm'))",
   "window.addEventListener('beforeunload',warnBeforeUnload)",
   'function closeDrawer(force=false)',
-  'discardChangesThen(()=>onClick(tab))',
+  'discardChangesThen(()=>{onClick(tab);rememberUiState()})',
   'async function createQuickOrder(creator,button)',
   "Everything else can be added later.",
   "Products, address, due date and all other details can be added later.",
@@ -208,6 +208,11 @@ assert.ok(appSource.includes('refreshCollaborationAfterMutation(c.id,tab)'), 're
 assert.ok(appSource.includes('refreshCreatorAfterMutation(creatorId)'), 'outreach saves must refresh the creator list and dashboard together');
 assert.ok(appSource.includes("payload.status='Published'"), 'a filled publication URL must automatically use Published status');
 assert.ok(appSource.includes('syncCollaborationStageForRecord(table,saved)'), 'related records must synchronize the parent workflow stage');
+assert.ok(appSource.includes("const UI_STATE_KEY='matchmate-crm-ui-location-v1'"), 'the current CRM location must persist within the browser tab');
+assert.ok(appSource.includes('await restoreUiLocation()'), 'a page refresh must restore the active view and drawer');
+assert.ok(appSource.includes("await openCreator(saved.drawer.id,saved.drawer.tab||'profile')"), 'creator detail tabs must restore after refresh');
+assert.ok(appSource.includes("await openCollaboration(saved.drawer.id,saved.drawer.tab||'overview')"), 'collaboration detail tabs must restore after refresh');
+assert.ok(indexSource.includes('src/app.js?v=20260829-location1'), 'the deployed page must load the location-preserving app version');
 
 console.log(JSON.stringify({
   creators: db.creators.length,
@@ -219,5 +224,6 @@ console.log(JSON.stringify({
   creatorCreateFlow: true,
   collaborationActionFlow: true,
   automaticWorkflowSync: true,
+  refreshLocationRestored: true,
   unsavedChangeGuard: true
 }));
