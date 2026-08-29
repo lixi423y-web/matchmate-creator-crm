@@ -37,6 +37,7 @@ const {
   createOrderForCreator,
   createCollaborationFromOutreach,
   cancelCollaboration,
+  syncCollaborationStageForRecord,
   save,
   creatorPage,
   getOne,
@@ -142,6 +143,22 @@ assert.equal(shipmentDraft.address_id, savedAddress.id, 'shipment must retain th
 assert.equal(shipmentDraft.shipped_at, null, 'blank shipment dates must save as null');
 assert.equal(shipmentDraft.delivered_at, null, 'blank delivery dates must save as null');
 
+const workflowOrder = await createOrderForCreator(created.id, null);
+const readyShipment = await save('shipments', { collaboration_id: workflowOrder.id, status: 'Ready' });
+const readySync = await syncCollaborationStageForRecord('shipments', readyShipment);
+assert.equal(readySync.changed, true, 'a Ready shipment must advance its collaboration stage');
+assert.equal((await getOne('collaborations', workflowOrder.id)).stage, 'Ready to Fulfill', 'Ready shipment must appear as Ready to Fulfill everywhere');
+const shippedShipment = await save('shipments', { ...readyShipment, status: 'Shipped' });
+await syncCollaborationStageForRecord('shipments', shippedShipment);
+assert.equal((await getOne('collaborations', workflowOrder.id)).stage, 'In Fulfillment', 'Shipped shipment must advance the collaboration to In Fulfillment');
+const publication = await save('publications', { collaboration_id: workflowOrder.id, platform: 'Instagram', url: 'https://www.instagram.com/p/demo/', status: 'Published' });
+const publishedSync = await syncCollaborationStageForRecord('publications', publication);
+assert.equal(publishedSync.changed, true, 'a saved published link must advance the collaboration stage');
+assert.equal((await getOne('collaborations', workflowOrder.id)).stage, 'Published', 'published link must appear as Published everywhere');
+const noDowngrade = await syncCollaborationStageForRecord('shipments', shippedShipment);
+assert.equal(noDowngrade.changed, false, 'an older workflow event must never downgrade a Published collaboration');
+assert.equal((await getOne('collaborations', workflowOrder.id)).stage, 'Published', 'Published stage must remain stable after older shipment edits');
+
 const collaboration = await createCollaborationFromOutreach(created.id, null);
 assert.equal(collaboration.creator_id, created.id, 'confirmed collaboration must belong to the creator');
 const convertedOutreach = await related('outreach_records', 'creator_id', created.id);
@@ -181,6 +198,16 @@ assert.ok(appSource.includes("payload.address_snapshot=fullAddress?"), 'shipment
 assert.ok(appSource.includes('Shipping Address (optional for Draft)'), 'shipment address must be visibly optional while the record is a draft');
 assert.ok(!appSource.includes("textarea('address_snapshot','Full Shipping Address'"), 'shipment must not require retyping the full address');
 assert.ok(!appSource.includes("invalid.reportValidity()"), 'invalid fields must use the visible drawer error instead of a silent native tooltip');
+assert.ok(appSource.includes('class="cell-action stage-quick-edit"'), 'collaboration rows must expose a direct stage edit action');
+assert.ok(appSource.includes("openCollaboration(tr.dataset.id,'overview',true)"), 'stage action must open the editable overview directly');
+assert.ok(appSource.includes('class="cell-action products-quick-edit'), 'collaboration rows must expose a direct product selection action');
+assert.ok(appSource.includes("openCollaboration(tr.dataset.id,'products')"), 'product action must open product selection directly');
+assert.ok(appSource.includes('Edit stage & details'), 'collaboration footer must explain where stage is changed');
+assert.ok(appSource.includes('No products selected'), 'empty product state must explain that no product was saved');
+assert.ok(appSource.includes('refreshCollaborationAfterMutation(c.id,tab)'), 'related saves must refresh the drawer, collaboration list and dashboard together');
+assert.ok(appSource.includes('refreshCreatorAfterMutation(creatorId)'), 'outreach saves must refresh the creator list and dashboard together');
+assert.ok(appSource.includes("payload.status='Published'"), 'a filled publication URL must automatically use Published status');
+assert.ok(appSource.includes('syncCollaborationStageForRecord(table,saved)'), 'related records must synchronize the parent workflow stage');
 
 console.log(JSON.stringify({
   creators: db.creators.length,
@@ -191,5 +218,6 @@ console.log(JSON.stringify({
   products: db.products.length,
   creatorCreateFlow: true,
   collaborationActionFlow: true,
+  automaticWorkflowSync: true,
   unsavedChangeGuard: true
 }));

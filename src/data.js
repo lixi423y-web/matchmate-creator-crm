@@ -263,6 +263,25 @@ export async function bulkUpdateCreators(ids,patch){
 export async function logActivity({entityType,entityId,creatorId=null,collaborationId=null,action,before=null,after=null,note=''}){
   return save('activity_logs',{entity_type:entityType,entity_id:entityId,creator_id:creatorId,collaboration_id:collaborationId,action,before_data:before,after_data:after,note});
 }
+const WORKFLOW_STAGE_ORDER=['Confirmed — Awaiting Details','Ready to Fulfill','In Fulfillment','Delivered','Content in Progress','Published','Completed'];
+function workflowTarget(table,record={}){
+  if(table==='publications'&&record.url&&record.status==='Published')return'Published';
+  if(table==='deliverables'&&record.status==='Published')return'Published';
+  if(table==='deliverables'&&['Draft Received','Revision Requested','Approved'].includes(record.status))return'Content in Progress';
+  if(table==='shipments'&&record.status==='Delivered')return'Delivered';
+  if(table==='shipments'&&record.status==='Shipped')return'In Fulfillment';
+  if(table==='shipments'&&record.status==='Ready')return'Ready to Fulfill';
+  return null;
+}
+export async function syncCollaborationStageForRecord(table,record={}){
+  const targetStage=workflowTarget(table,record),collaborationId=record.collaboration_id;
+  if(!targetStage||!collaborationId)return{record:null,changed:false,targetStage:null};
+  const current=await getOne('collaborations',collaborationId);
+  if(!current||['Closed','Completed'].includes(current.stage))return{record:current,changed:false,targetStage};
+  const currentRank=WORKFLOW_STAGE_ORDER.indexOf(current.stage),targetRank=WORKFLOW_STAGE_ORDER.indexOf(targetStage);
+  if(currentRank>=targetRank)return{record:current,changed:false,targetStage};
+  return{record:await save('collaborations',{id:collaborationId,stage:targetStage}),changed:true,targetStage};
+}
 export async function syncCollaborationProducts(collaborationId,productIds,ownerId=null){
   const selected=[...new Set((productIds||[]).filter(Boolean))];
   let rows;

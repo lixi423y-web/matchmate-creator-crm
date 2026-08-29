@@ -55,6 +55,7 @@
 .action-busy{cursor:wait}
 .action-busy button,.action-busy input,.action-busy select,.action-busy textarea{pointer-events:none}
 .draft-status{display:inline-flex;margin-top:7px;border-radius:999px;padding:4px 8px;background:var(--amber-2);color:var(--amber);font-size:11px;font-weight:750}
+.cell-action{display:grid;justify-items:start;gap:3px;width:100%;padding:4px 0;border:0;border-radius:4px;background:transparent;color:var(--ink);text-align:left;font-weight:500}.cell-action:hover{filter:none;background:var(--blue-2);color:var(--blue)}.cell-action small{font-size:10px;color:var(--blue);font-weight:700}.cell-action.missing-value span{color:var(--muted);font-style:italic}.cell-action .badge{pointer-events:none}
 @media(max-width:1250px){.metric-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:850px){.metric-grid,.dashboard-analysis,.product-groups,.import-controls{grid-template-columns:1fr}.handoff-banner,.packing-list{grid-template-columns:1fr}.bottleneck-note{align-items:flex-start;flex-direction:column;gap:3px}.pipeline-row{grid-template-columns:110px minmax(70px,1fr) 34px}.heading-actions{width:100%}.heading-actions button{flex:1}}
 
