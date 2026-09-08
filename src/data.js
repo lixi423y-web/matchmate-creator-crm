@@ -154,7 +154,7 @@ function hydrateCreator(row){const creator_accounts=demo.creator_accounts.filter
 export async function referenceData(){
   if(demoMode)return{owners:demo.owners,campaigns:demo.campaigns,products:demo.products};
   const[owners,campaigns,products]=await Promise.all([list('crm_users',{pageSize:100,sort:'display_name.asc'}),list('campaigns',{pageSize:100,sort:'name.asc'}),list('products',{pageSize:500,sort:'name.asc'})]);
-  return{owners:owners.data.map(x=>({...x,name:x.display_name||x.email||'Team member'})),campaigns:campaigns.data,products:products.data};
+  return{owners:owners.data.filter(x=>!x.archived_at).map(x=>({...x,name:x.display_name||x.email||'Team member'})),campaigns:campaigns.data,products:products.data};
 }
 export async function creatorChoices(search=''){
   if(demoMode)return demo.creators.filter(row=>!search||JSON.stringify(row).toLowerCase().includes(search.toLowerCase())).slice(0,1000);
