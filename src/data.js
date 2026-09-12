@@ -1,4 +1,5 @@
 import{demoDatabase}from'./demo.js?v=20260825-shared-auth1';
+import{instagramHandle,accountKey,creatorSearch,validateInstagramAccount}from'./identity.js';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const publishableKey=cfg.supabasePublishableKey||cfg.supabaseAnonKey||'';
@@ -145,6 +146,7 @@ export async function collaborationPage(options={}){
 }
 function hydrateCollaboration(row){const creator=demo.creators.find(c=>c.id===row.creator_id),creator_account=demo.creator_accounts.find(x=>x.creator_id===row.creator_id&&x.is_primary)||demo.creator_accounts.find(x=>x.creator_id===row.creator_id);return{...row,creator,creator_account,creator_name:creator?.display_name,creator_handle:creator_account?.handle,creator_profile_url:creator_account?.profile_url,campaign:demo.campaigns.find(c=>c.id===row.campaign_id),collaboration_products:demo.collaboration_products.filter(x=>x.collaboration_id===row.id),shipments:demo.shipments.filter(x=>x.collaboration_id===row.id),deliverables:demo.deliverables.filter(x=>x.collaboration_id===row.id)}}
 export async function creatorPage(options={}){
+  options={...options,search:creatorSearch(options.search)};
   if(demoMode){let rows=demo.creators.map(row=>hydrateCreator(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,value])=>value!==''&&value!=null).forEach(([key,value])=>rows=rows.filter(row=>String(row[key]??'')===String(value)));rows=sortCreatorRows(rows,sort);return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
   const query=encodeListQuery({...options,select:'*',searchFields:['display_name','nickname','contact_email','creator_code','primary_handle','location']});
   return request(`creator_directory?${query}`,{headers:{Prefer:'count=exact'}});
@@ -160,18 +162,25 @@ export async function creatorChoices(search=''){
   if(demoMode)return demo.creators.filter(row=>!search||JSON.stringify(row).toLowerCase().includes(search.toLowerCase())).slice(0,1000);
   return creatorPage({pageSize:1000,search,sort:'display_name.asc'}).then(result=>result.data);
 }
-export function normalizeCreatorHandle(value){return String(value||'').trim().replace(/^@/,'').trim()}
-function importKey(platform,handle){return`${String(platform||'Instagram').trim().toLowerCase()}|${normalizeCreatorHandle(handle).toLowerCase()}`}
+export function normalizeCreatorHandle(value){return instagramHandle(value)}
+function importKey(platform,handle){return accountKey({platform,handle})}
 function nonEmpty(record){return Object.fromEntries(Object.entries(record||{}).filter(([,value])=>value!==''&&value!=null))}
 export async function existingCreatorAccounts(){
-  if(demoMode)return demo.creator_accounts.filter(row=>!row.archived_at).map(row=>({...row}));
-  const{data}=await request('creator_accounts?select=id,creator_id,platform,handle,profile_url,followers,is_primary,link_status&archived_at=is.null&limit=5000');return data||[];
+  if(demoMode)return demo.creator_accounts.map(row=>({...row}));
+  const rows=[];
+  for(let offset=0;;offset+=500){const{data}=await request(`creator_accounts?select=id,creator_id,platform,handle,profile_url,followers,is_primary,link_status,archived_at&order=id.asc&limit=500&offset=${offset}`);rows.push(...(data||[]));if(!data||data.length<500)return rows}
+}
+export async function findCreatorDuplicates(value){
+  const key=accountKey({handle:value});if(!key)return[];
+  const accounts=(await existingCreatorAccounts()).filter(a=>accountKey(a)===key);
+  const ids=[...new Set(accounts.map(a=>a.creator_id))];
+  return Promise.all(ids.map(async id=>{const creator=await getOne('creators',id),outreach=(await related('outreach_records','creator_id',id))[0];const ownerId=creator?.owner_id||outreach?.owner_id;const owner=ownerId?await getOne('crm_users',ownerId):null;return{creator,owner:owner?.display_name||'Unassigned',status:outreach?.status||'Not Contacted',lastContact:outreach?.last_contact_at,archived:!!creator?.archived_at||accounts.some(a=>a.creator_id===id&&a.archived_at)}}));
 }
 export async function createCreatorWithPrimaryAccount({creator={},account={}}={}){
-  const handle=normalizeCreatorHandle(account.handle);
+  const handle=validateInstagramAccount(account);
   if(!handle)throw new Error('Instagram Handle is required.');
   const existing=await existingCreatorAccounts();
-  const duplicate=existing.find(item=>String(item.platform||'').toLowerCase()==='instagram'&&normalizeCreatorHandle(item.handle).toLowerCase()===handle.toLowerCase());
+  const duplicate=existing.find(item=>accountKey(item)===accountKey({handle}));
   if(duplicate)throw new Error(`@${handle} is already in Creator database.`);
   const ownerId=creator.owner_id||null;
   let savedCreator=null,savedAccount=null,savedOutreach=null;
@@ -188,8 +197,10 @@ export async function createCreatorWithPrimaryAccount({creator={},account={}}={}
   }
 }
 export async function saveCreatorAccount(record={}){
-  const handle=normalizeCreatorHandle(record.handle);
+  const handle=String(record.platform||'Instagram').toLowerCase()==='instagram'?validateInstagramAccount(record):String(record.handle||'').trim().replace(/^@/,'');
   if(!handle)throw new Error('Account Handle is required.');
+  const key=accountKey({...record,handle});
+  if((await existingCreatorAccounts()).some(a=>a.id!==record.id&&accountKey(a)===key))throw new Error(`@${handle} is already in Creator database.`);
   const previous=record.id?await getOne('creator_accounts',record.id):null;
   const saved=await save('creator_accounts',{...record,handle});
   if(!saved.is_primary)return saved;
@@ -202,10 +213,13 @@ export async function saveCreatorAccount(record={}){
 }
 export async function importCreators(rows,mode='skip'){
   const existing=await existingCreatorAccounts(),byKey=new Map(existing.map(account=>[importKey(account.platform,account.handle),account]));
-  const result={created:0,updated:0,skipped:0,errors:[]};
+  const result={created:0,updated:0,skipped:0,errors:[]},seen=new Set();
   for(const row of rows){
     if(row.error){result.errors.push({row:row.row,message:row.error});continue}
-    const handle=normalizeCreatorHandle(row.account.handle),key=importKey(row.account.platform,handle),match=byKey.get(key);
+    try{if(String(row.account.platform||'Instagram').toLowerCase()==='instagram')validateInstagramAccount(row.account)}catch(error){result.errors.push({row:row.row,message:error.message});continue}
+    const handle=String(row.account.platform||'Instagram').toLowerCase()==='instagram'?normalizeCreatorHandle(row.account.handle||row.account.profile_url):String(row.account.handle||'').trim().replace(/^@/,''),key=importKey(row.account.platform,handle),match=byKey.get(key);
+    if(!key){result.errors.push({row:row.row,message:'Enter a valid account handle or Instagram profile URL.'});continue}
+    if(seen.has(key)||match?.archived_at){result.skipped++;continue}seen.add(key);
     if(match&&mode==='skip'){result.skipped++;continue}
     try{
       if(match){

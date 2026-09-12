@@ -56,7 +56,7 @@ assert.equal(normalized.approved_budget, null, 'blank optional numeric value mus
 assert.equal(normalized.followers, null, 'blank optional integer must be saved as null');
 assert.equal(normalized.quantity, 1, 'blank required quantity must use the safe default');
 
-const handle = `Creator_Save_Test_${Date.now()}`;
+const handle = `save_test_${Date.now()}`;
 const created = await createCreatorWithPrimaryAccount({
   creator: { display_name: '', owner_id: '' },
   account: { handle: `  @${handle}  `, profile_url: '' }
@@ -80,8 +80,8 @@ await assert.rejects(
   'duplicate Instagram handles must be blocked case-insensitively'
 );
 
-const renamedHandle = `${handle}_Renamed`;
-const updatedAccount = await saveCreatorAccount({ ...accounts[0], handle: ` @${renamedHandle} `, is_primary: true });
+const renamedHandle = `renamed_${Date.now()}`;
+const updatedAccount = await saveCreatorAccount({ ...accounts[0], handle: ` @${renamedHandle} `, profile_url: `https://instagram.com/${renamedHandle}/`, is_primary: true });
 assert.equal(updatedAccount.handle, renamedHandle, 'primary account edit must normalize its handle');
 assert.equal((await getOne('creators', created.id)).handle, renamedHandle, 'primary account edit must synchronize legacy creators.handle');
 
@@ -212,7 +212,7 @@ assert.ok(appSource.includes("const UI_STATE_KEY='matchmate-crm-ui-location-v1'"
 assert.ok(appSource.includes('await restoreUiLocation()'), 'a page refresh must restore the active view and drawer');
 assert.ok(appSource.includes("await openCreator(saved.drawer.id,saved.drawer.tab||'profile')"), 'creator detail tabs must restore after refresh');
 assert.ok(appSource.includes("await openCollaboration(saved.drawer.id,saved.drawer.tab||'overview')"), 'collaboration detail tabs must restore after refresh');
-assert.ok(indexSource.includes('src/app.js?v=20260829-location1'), 'the deployed page must load the location-preserving app version');
+assert.ok(indexSource.includes('src/app.js?v=20260912-dedup1'), 'the deployed page must load the dedup and location-preserving app version');
 
 console.log(JSON.stringify({
   creators: db.creators.length,

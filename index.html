@@ -55,7 +55,7 @@
         <div class="page-heading"><div><h2>Creator database</h2><p>One persistent creator profile; collaboration rounds stay separate.</p></div><div class="heading-actions"><button id="importCreatorsBtn" class="secondary" type="button">Import CSV</button><button id="newCreatorBtn" type="button">Add creator</button></div></div>
         <section class="surface data-surface">
           <div id="creatorFilters" class="filter-bar">
-            <label class="search-field">Search<input name="search" type="search" placeholder="Handle, name, email or note"></label>
+            <label class="search-field">Search<input name="search" type="search" placeholder="Instagram URL, @handle, name or email"></label>
             <label>Outreach<select name="outreach_status"></select></label>
             <label>Fit<select name="fit_verdict"></select></label>
             <label>Tier<select name="tier"></select></label>
@@ -102,6 +102,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./config.js?v=20260813-import1"></script>
-  <script type="module" src="./src/app.js?v=20260829-location1"></script>
+  <script type="module" src="./src/app.js?v=20260912-dedup1"></script>
 </body>
 </html>
