@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {shippingAddressText,copyShippingAddress} from '../src/shipping-address.js';
 const address='Demo Recipient\n123 Test Street\nUnit B\nTest City, CA 12345\nUSA';
+const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
+assert.ok(app.split('\n').find(line=>line.startsWith('function relatedEditorSection')).includes('shipmentAddressPanel(row)'),'Shipment cards must render address controls');
 assert.equal(shippingAddressText(address),address);
 assert.equal(shippingAddressText({full_address:address,recipient_name:'Demo Recipient'}),address);
 assert.equal(shippingAddressText({full_address:address,phone:'555-0100'}),'555-0100\n'+address);

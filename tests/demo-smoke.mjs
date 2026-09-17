@@ -212,7 +212,7 @@ assert.ok(appSource.includes("const UI_STATE_KEY='matchmate-crm-ui-location-v1'"
 assert.ok(appSource.includes('await restoreUiLocation()'), 'a page refresh must restore the active view and drawer');
 assert.ok(appSource.includes("await openCreator(saved.drawer.id,saved.drawer.tab||'profile')"), 'creator detail tabs must restore after refresh');
 assert.ok(appSource.includes("await openCollaboration(saved.drawer.id,saved.drawer.tab||'overview')"), 'collaboration detail tabs must restore after refresh');
-assert.ok(indexSource.includes('src/app.js?v=20260917-shipping1'), 'the deployed page must load the shipping tools and location-preserving app version');
+assert.ok(indexSource.includes('src/app.js?v=20260917-shipping2'), 'the deployed page must load the shipping tools and location-preserving app version');
 
 console.log(JSON.stringify({
   creators: db.creators.length,
