@@ -64,3 +64,11 @@
 .auth-panel input{width:100%}
 .auth-panel button[type=submit]{width:100%;margin-top:8px}
 .auth-panel .form-error{margin:10px 0 0}
+/* Shipping details remain inside the authenticated drawer. */
+.related-item > div:first-child{min-width:0;flex:1}
+.shipping-address{margin-top:12px;min-width:0}
+.shipping-address summary{cursor:pointer;color:#176ca6;font-weight:600;padding:10px 0}
+.shipping-address-text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.6;background:#f4f8fb;border:1px solid #d8e4ec;border-radius:8px;padding:14px;margin:0}
+.address-tools{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:8px 0}
+.address-tools [role="status"]{font-size:13px;color:#466177}
+.shipping-address textarea{width:100%;line-height:1.6}

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {shippingAddressText,copyShippingAddress} from '../src/shipping-address.js';
+const address='Demo Recipient\n123 Test Street\nUnit B\nTest City, CA 12345\nUSA';
+assert.equal(shippingAddressText(address),address);
+assert.equal(shippingAddressText({full_address:address,recipient_name:'Demo Recipient'}),address);
+assert.equal(shippingAddressText({full_address:address,phone:'555-0100'}),'555-0100\n'+address);
+assert.equal(shippingAddressText(null),'');
+let copied;
+await copyShippingAddress(address,{writeText:async text=>{copied=text}});
+assert.equal(copied,address);
+await assert.rejects(copyShippingAddress('',{writeText:async()=>assert.fail()}));
+await assert.rejects(copyShippingAddress(address,{writeText:async()=>{throw Error('denied')}}));
+await assert.rejects(copyShippingAddress(address,null));
+console.log('Shipping address formatting, full multiline copy, empty and denied clipboard tests passed.');
