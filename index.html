@@ -52,7 +52,7 @@
       </section>
 
       <section id="creatorsView" class="view">
-        <div class="page-heading"><div><h2>Creator database</h2><p>One persistent creator profile; collaboration rounds stay separate.</p></div><div class="heading-actions"><button id="importCreatorsBtn" class="secondary" type="button">Import CSV</button><button id="newCreatorBtn" type="button">Add creator</button></div></div>
+        <div class="page-heading"><div><h2>Creator database</h2><p>One persistent creator profile; collaboration rounds stay separate.</p></div><div class="heading-actions"><button id="exportCreatorsBtn" class="secondary" type="button">Export CSV</button><button id="importCreatorsBtn" class="secondary" type="button">Import CSV</button><button id="newCreatorBtn" type="button">Add creator</button></div></div>
         <section class="surface data-surface">
           <div id="creatorFilters" class="filter-bar">
             <label class="search-field">Search<input name="search" type="search" placeholder="Instagram URL, @handle, name or email"></label>
@@ -67,7 +67,7 @@
           </div>
           <div class="table-toolbar">
             <div><button id="selectPageBtn" class="secondary compact" type="button">Select page</button><button id="clearSelectionBtn" class="secondary compact" type="button">Clear selection</button><span id="creatorSelectionCount" class="muted">0 selected</span></div>
-            <div><button id="bulkCreatorBtn" class="secondary compact" type="button">Bulk actions</button><button id="exportCreatorsBtn" class="secondary compact" type="button">Export CSV</button></div>
+            <div><button id="bulkCreatorBtn" class="secondary compact" type="button">Bulk actions</button></div>
           </div>
           <div class="table-wrap"><table><thead id="creatorTableHead"><tr><th class="check-col"></th><th class="sortable-header" aria-sort="none"><button class="sort-button" data-creator-sort="display_name" type="button">Creator<span class="sort-icon" aria-hidden="true">↕</span></button></th><th class="sortable-header" aria-sort="none"><button class="sort-button" data-creator-sort="primary_handle" type="button">Primary account<span class="sort-icon" aria-hidden="true">↕</span></button></th><th>Fit</th><th>Outreach</th><th>Owner</th><th class="sortable-header" aria-sort="descending"><button class="sort-button active" data-creator-sort="created_at" type="button">Added<span class="sort-icon" aria-hidden="true">↓</span></button></th><th class="sortable-header" aria-sort="none"><button class="sort-button" data-creator-sort="last_contact_at" type="button">Last contact<span class="sort-icon" aria-hidden="true">↕</span></button></th><th class="sortable-header" aria-sort="none"><button class="sort-button" data-creator-sort="collaboration_count" type="button">Collaborations<span class="sort-icon" aria-hidden="true">↕</span></button></th><th class="action-col"></th></tr></thead><tbody id="creatorRows"></tbody></table></div>
           <div id="creatorPagination" class="pagination"></div>
