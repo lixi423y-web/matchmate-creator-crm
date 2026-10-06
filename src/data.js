@@ -97,7 +97,13 @@ function queryString({select='*',page=1,pageSize=50,sort='updated_at.desc',searc
 function encodeListQuery({select='*',page=1,pageSize=50,sort='updated_at.desc',search='',filters={},searchFields=[]}={}){
   const q=new URLSearchParams({select,order:sort,limit:String(pageSize),offset:String((page-1)*pageSize)});
   if(search){const safe=cleanSearch(search);q.set('or',`(${searchFields.map(field=>`${field}.ilike.*${safe}*`).join(',')})`)}
-  Object.entries(filters).filter(([,v])=>v!==''&&v!=null).forEach(([key,value])=>{
+  const{created_from,created_to,...exactFilters}=filters;
+  const createdFilters=[];
+  if(created_from)createdFilters.push(`created_at.gte.${created_from}T00:00:00Z`);
+  if(created_to){const end=new Date(`${created_to}T00:00:00Z`);end.setUTCDate(end.getUTCDate()+1);createdFilters.push(`created_at.lt.${end.toISOString()}`)}
+  if(createdFilters.length===1){const[field,operator,...value]=createdFilters[0].split('.');q.set(field,`${operator}.${value.join('.')}`)}
+  else if(createdFilters.length>1)q.set('and',`(${createdFilters.join(',')})`);
+  Object.entries(exactFilters).filter(([,v])=>v!==''&&v!=null).forEach(([key,value])=>{
     if(key==='product_id')q.set('product_ids',`cs.{${value}}`);
     else if(key==='start_date')q.set('start_date',`gte.${value}`);
     else if(key==='end_date')q.set('start_date',`lte.${value}`);
@@ -147,7 +153,7 @@ export async function collaborationPage(options={}){
 function hydrateCollaboration(row){const creator=demo.creators.find(c=>c.id===row.creator_id),creator_account=demo.creator_accounts.find(x=>x.creator_id===row.creator_id&&x.is_primary)||demo.creator_accounts.find(x=>x.creator_id===row.creator_id);return{...row,creator,creator_account,creator_name:creator?.display_name,creator_handle:creator_account?.handle,creator_profile_url:creator_account?.profile_url,campaign:demo.campaigns.find(c=>c.id===row.campaign_id),collaboration_products:demo.collaboration_products.filter(x=>x.collaboration_id===row.id),shipments:demo.shipments.filter(x=>x.collaboration_id===row.id),deliverables:demo.deliverables.filter(x=>x.collaboration_id===row.id)}}
 export async function creatorPage(options={}){
   options={...options,search:creatorSearch(options.search)};
-  if(demoMode){let rows=demo.creators.map(row=>hydrateCreator(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,value])=>value!==''&&value!=null).forEach(([key,value])=>rows=rows.filter(row=>String(row[key]??'')===String(value)));rows=sortCreatorRows(rows,sort);return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
+  if(demoMode){let rows=demo.creators.map(row=>hydrateCreator(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}const{created_from,created_to,...exactFilters}=filters;Object.entries(exactFilters).filter(([,value])=>value!==''&&value!=null).forEach(([key,value])=>rows=rows.filter(row=>String(row[key]??'')===String(value)));if(created_from)rows=rows.filter(row=>new Date(row.created_at)>=new Date(`${created_from}T00:00:00Z`));if(created_to){const end=new Date(`${created_to}T00:00:00Z`);end.setUTCDate(end.getUTCDate()+1);rows=rows.filter(row=>new Date(row.created_at)<end)}rows=sortCreatorRows(rows,sort);return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
   const query=encodeListQuery({...options,select:'*',searchFields:['display_name','nickname','contact_email','creator_code','primary_handle','location']});
   return request(`creator_directory?${query}`,{headers:{Prefer:'count=exact'}});
 }
