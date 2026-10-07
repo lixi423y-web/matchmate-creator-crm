@@ -278,8 +278,9 @@ export async function deleteErroneousCollaboration(record,reason){
   await remove('collaborations',record.id);
 }
 export async function bulkUpdateCreators(ids,patch){
-  if(demoMode){for(const id of ids)await save('creators',{id,...patch});return}
-  for(let index=0;index<ids.length;index+=100){const chunk=ids.slice(index,index+100);await request(`creators?id=in.(${chunk.join(',')})`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(patch)})}
+  const{outreach_status,...creatorPatch}=patch;
+  if(Object.keys(creatorPatch).length){if(demoMode){for(const id of ids)await save('creators',{id,...creatorPatch})}else for(let index=0;index<ids.length;index+=100){const chunk=ids.slice(index,index+100);await request(`creators?id=in.(${chunk.join(',')})`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(creatorPatch)})}}
+  if(outreach_status)for(const id of ids){const latest=(await related('outreach_records','creator_id',id))[0];await save('outreach_records',latest?{id:latest.id,status:outreach_status}:{creator_id:id,status:outreach_status,channel:'Instagram DM',owner_id:creatorPatch.owner_id||null})}
 }
 export async function logActivity({entityType,entityId,creatorId=null,collaborationId=null,action,before=null,after=null,note=''}){
   return save('activity_logs',{entity_type:entityType,entity_id:entityId,creator_id:creatorId,collaboration_id:collaborationId,action,before_data:before,after_data:after,note});
