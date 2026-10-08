@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Matchmate creator outreach and collaboration operations">
   <title>Matchmate Creator CRM</title>
-  <link rel="stylesheet" href="./styles.css?v=20260917-shipping1">
+  <link rel="stylesheet" href="./styles.css?v=20261008-password1">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -14,7 +14,12 @@
       <h1>Sign in</h1>
       <p>Use the shared internal CRM account.</p>
       <label>Email<input id="loginEmail" name="email" type="email" autocomplete="username" required></label>
-      <label>Password<input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
+      <label for="loginPassword">Password
+        <span class="password-control">
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+          <button id="toggleLoginPassword" class="secondary" type="button" aria-controls="loginPassword" aria-label="显示密码" aria-pressed="false">显示</button>
+        </span>
+      </label>
       <p id="loginError" class="form-error hidden" role="alert"></p>
       <button id="loginButton" type="submit">Sign in</button>
     </form>
@@ -103,6 +108,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./config.js?v=20260813-import1"></script>
-  <script type="module" src="./src/app.js?v=20261007-bulk-stage1"></script>
+  <script type="module" src="./src/app.js?v=20261008-password1"></script>
 </body>
 </html>

@@ -19,18 +19,19 @@ async function boot(){
     const existingSession=await restoreSession();if(existingSession)return openApp();showLogin();
   }catch(error){console.error(error);showLogin('Unable to initialize secure login. Refresh and try again.')}
 }
-function bindAuth(){$('#loginForm').addEventListener('submit',login);$('#logoutBtn').addEventListener('click',logout)}
+function bindAuth(){$('#loginForm').addEventListener('submit',login);$('#logoutBtn').addEventListener('click',logout);$('#toggleLoginPassword')?.addEventListener('click',()=>setPasswordVisibility($('#loginPassword').type==='password'))}
+function setPasswordVisibility(visible){const input=$('#loginPassword'),button=$('#toggleLoginPassword');input.type=visible?'text':'password';if(button){button.textContent=visible?'隐藏':'显示';button.setAttribute('aria-label',visible?'隐藏密码':'显示密码');button.setAttribute('aria-pressed',String(visible))}}
 async function login(event){
   event.preventDefault();const email=$('#loginEmail').value.trim(),password=$('#loginPassword').value,button=$('#loginButton');
   if(!email||!password)return showLoginError('Enter the shared account email and password.');
   showLoginError('');button.disabled=true;button.textContent='Signing in…';
-  try{await signInWithPassword(email,password);$('#loginForm').reset();await openApp()}
+  try{await signInWithPassword(email,password);$('#loginForm').reset();setPasswordVisibility(false);await openApp()}
   catch(error){console.error(error);showLoginError('Email or password is incorrect.')}
   finally{button.disabled=false;button.textContent='Sign in'}
 }
 async function logout(){const button=$('#logoutBtn');button.disabled=true;showLogin();try{await signOut()}catch(error){console.error(error);showLoginError('Signed out locally. Refresh before signing in again.')}finally{button.disabled=false}}
 function showLoginError(text){const error=$('#loginError');error.textContent=text;error.classList.toggle('hidden',!text)}
-function showLogin(error=''){appStarted=false;clearCrmData();$('#app').classList.add('hidden');$('#authGate').classList.remove('hidden');$('#loginPassword').value='';showLoginError(error)}
+function showLogin(error=''){appStarted=false;clearCrmData();$('#app').classList.add('hidden');$('#authGate').classList.remove('hidden');$('#loginPassword').value='';setPasswordVisibility(false);showLoginError(error)}
 function clearCrmData(){
   state.creators=[];state.creatorCount=0;state.collaborations=[];state.collaborationCount=0;state.creatorSelection.clear();state.creatorImport={rows:[],existing:[],mode:'skip'};state.refs={owners:[],campaigns:[],products:[],creatorOptions:[]};state.drawer=null;state.draft=null;state.request.creator++;state.request.collaboration++;state.request.detail++;state.request.drawerRender++;
   $('#drawer').classList.remove('open');$('#drawer').setAttribute('aria-hidden','true');for(const id of ['dashboardCards','bottleneckNote','outreachTasks','collaborationTasks','creatorProgress','productMix','creatorRows','creatorPagination','collaborationRows','collaborationPagination','drawerBody','drawerFooter']){const node=$(`#${id}`);if(node)node.textContent=''}
