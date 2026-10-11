@@ -156,10 +156,23 @@ export async function creatorPage(options={}){
   options={...options,search:creatorSearch(options.search)};
   if(demoMode){let rows=demo.creators.map(row=>hydrateCreator(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}const{created_from,created_to,owner_id,...exactFilters}=filters;Object.entries(exactFilters).filter(([,value])=>value!==''&&value!=null).forEach(([key,value])=>rows=rows.filter(row=>String(row[key]??'')===String(value)));if(owner_id==='__unassigned__')rows=rows.filter(row=>row.owner_id==null);else if(owner_id)rows=rows.filter(row=>String(row.owner_id??'')===String(owner_id));if(created_from)rows=rows.filter(row=>new Date(row.created_at)>=new Date(`${created_from}T00:00:00Z`));if(created_to){const end=new Date(`${created_to}T00:00:00Z`);end.setUTCDate(end.getUTCDate()+1);rows=rows.filter(row=>new Date(row.created_at)<end)}rows=sortCreatorRows(rows,sort);return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
   const query=encodeListQuery({...options,select:'*',searchFields:['display_name','nickname','contact_email','creator_code','primary_handle','location']});
-  return request(`creator_directory?${query}`,{headers:{Prefer:'count=exact'}});
+  const result=await request(`creator_directory?${query}`,{headers:{Prefer:'count=exact'}});
+  if(options.includeFollowers&&result.data?.length)result.data=await attachPrimaryFollowers(result.data);
+  return result;
+}
+async function attachPrimaryFollowers(rows){
+  const accounts=[];
+  for(let start=0;start<rows.length;start+=100){
+    const ids=rows.slice(start,start+100).map(row=>row.id);
+    for(let offset=0;;offset+=500){
+      const result=await request(`creator_accounts?select=id,creator_id,handle,platform,followers&creator_id=in.(${ids.join(',')})&archived_at=is.null&order=id.asc&limit=500&offset=${offset}`);
+      accounts.push(...(result.data||[]));if(!result.data||result.data.length<500)break;
+    }
+  }
+  return rows.map(row=>({...row,primary_followers:accounts.find(account=>account.creator_id===row.id&&account.handle===row.primary_handle&&account.platform===row.primary_platform)?.followers??null}));
 }
 function sortCreatorRows(rows,sort){const[field,direction]=sort.split('.'),factor=direction==='asc'?1:-1;return rows.sort((a,b)=>{const left=a[field],right=b[field];if((left==null||left==='')&&(right==null||right===''))return 0;if(left==null||left==='')return 1;if(right==null||right==='')return-1;const compared=typeof left==='number'&&typeof right==='number'?left-right:String(left).localeCompare(String(right),undefined,{numeric:true,sensitivity:'base'});return compared*factor})}
-function hydrateCreator(row){const creator_accounts=demo.creator_accounts.filter(x=>x.creator_id===row.id),outreach_records=demo.outreach_records.filter(x=>x.creator_id===row.id).slice(0,1),collaborations=demo.collaborations.filter(x=>x.creator_id===row.id),account=creator_accounts.find(x=>x.is_primary)||creator_accounts[0],outreach=outreach_records[0];return{...row,creator_accounts,outreach_records,collaborations,primary_handle:account?.handle||null,primary_platform:account?.platform||null,primary_profile_url:account?.profile_url||null,outreach_status:outreach?.status||'Not Contacted',last_contact_at:outreach?.last_contact_at||null,next_follow_up_at:outreach?.next_follow_up_at||null,collaboration_count:collaborations.length}}
+function hydrateCreator(row){const creator_accounts=demo.creator_accounts.filter(x=>x.creator_id===row.id),outreach_records=demo.outreach_records.filter(x=>x.creator_id===row.id).slice(0,1),collaborations=demo.collaborations.filter(x=>x.creator_id===row.id),account=creator_accounts.find(x=>x.is_primary)||creator_accounts[0],outreach=outreach_records[0];return{...row,creator_accounts,outreach_records,collaborations,primary_followers:account?.followers??null,primary_handle:account?.handle||null,primary_platform:account?.platform||null,primary_profile_url:account?.profile_url||null,outreach_status:outreach?.status||'Not Contacted',last_contact_at:outreach?.last_contact_at||null,next_follow_up_at:outreach?.next_follow_up_at||null,collaboration_count:collaborations.length}}
 export async function referenceData(){
   if(demoMode)return{owners:demo.owners,campaigns:demo.campaigns,products:demo.products};
   const[owners,campaigns,products]=await Promise.all([list('crm_users',{pageSize:100,sort:'display_name.asc'}),list('campaigns',{pageSize:100,sort:'name.asc'}),list('products',{pageSize:500,sort:'name.asc'})]);
