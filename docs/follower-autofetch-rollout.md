@@ -1,15 +1,19 @@
-# Automatic followers — Free-plan trial, not yet enabled in production
+# Automatic followers — guarded Free-plan trial
 
 ## Current verified status — 2026-10-14
 
 Supabase connection verified; project `kcibsvltzcjpnuqnzfld` is ACTIVE_HEALTHY.
-Protected Edge Function `creator-followers` version 1 is ACTIVE with
+Protected Edge Function `creator-followers` version 3 is ACTIVE with
 `verify_jwt: true`. Actual no-Authorization and invalid-JWT requests both
 returned HTTP 401. All 8 local smoke suites passed again. No SQL or business
-data writes were executed. Apify secret presence and authenticated/provider
-integration remain unverified. Frontend automation is not yet published/enabled.
-The user must enter `APIFY_TOKEN` directly into Supabase Secrets; the connector
-does not expose a secret-configuration tool, and the agent will not read tokens.
+data writes were executed by the agent. User confirmed secret saved; actual CORS
+preflight returned HTTP 204 and `X-CRM-Followers-Configured: true`, proving required
+configuration presence without exposing values or making any provider request.
+Frontend trial is enabled via `creatorFollowersAutoFetch: true`.
+Authenticated/provider/first real creator integration remains pending the user's
+next normal Add creator; existing browser sessions are inaccessible to this connector
+and session tokens must not be read. Do not claim a live fetch has passed until the
+persisted primary-account count is verified. Existing production data is not a test fixture.
 
 Base: main `4d87558cfc0ca47b8cfc54c371b8472441fccca3`.
 No SQL migration, table deletion, RLS/grant changes, service-role client, redesign,
@@ -61,11 +65,12 @@ Project: `kcibsvltzcjpnuqnzfld`. Keep all existing Auth/RLS unchanged.
 4. Deploy both Edge Function files from source. Keep gateway JWT verification
    enabled if compatible with this project's JWT; never remove handler-side Auth
    validation. No production SQL is required.
-5. Before enabling frontend: verify missing/invalid JWT denied, non-CRM Auth user
-   denied, real Free-plan guard passes, existing/non-new accounts cause no provider
-   run. Verify one user-authorized real new creator fetch and persisted count.
-6. Only after backend verification set `creatorFollowersAutoFetch: true` in public
-   CRM config, publish frontend files, and verify actual production Add creator,
+5. Verify missing/invalid JWT denied and required configuration present in the
+   live endpoint. Unit-test shared-user authorization, Free-only guard and
+   conditional writes. Do not read existing user sessions to perform live tests.
+6. Publish the guarded frontend trial with `creatorFollowersAutoFetch: true`.
+   Complete final live acceptance with the user's next real Add creator: verify
+   the real Free-plan guard, returned provider count, actual persisted account count,
    no login/refresh queries, manual value preservation, unchanged page location,
    and Logout. Local mock tests do not substitute for these live checks.
 

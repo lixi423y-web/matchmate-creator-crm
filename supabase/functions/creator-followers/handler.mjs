@@ -21,7 +21,11 @@ export function createHandler({env,fetchImpl=fetch,now=Date.now}={}){
     const cors={'Access-Control-Allow-Origin':allowedOrigin,'Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS','Vary':'Origin'};
     const reply=(status,body)=>new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
     if(origin&&origin!==allowedOrigin)return reply(403,{status:'denied'});
-    if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
+    if(req.method==='OPTIONS'){
+      // Non-sensitive readiness flag only. Never return credentials or CRM data.
+      const configured=Boolean(env('APIFY_TOKEN')&&env('SUPABASE_URL')&&env('CRM_PUBLISHABLE_KEY')&&env('FOLLOWERS_AUTOFETCH_ENABLED')==='true');
+      return new Response(null,{status:204,headers:{...cors,'X-CRM-Followers-Configured':String(configured)}});
+    }
     if(req.method!=='POST')return reply(405,{status:'denied'});
     const authorization=req.headers.get('authorization')||'';
     if(!/^Bearer \S+$/.test(authorization))return reply(401,{status:'denied'});

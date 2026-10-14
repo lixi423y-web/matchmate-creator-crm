@@ -26,6 +26,9 @@ function fixture(overrides={}){
   return{calls,handler,req};
 }
 let f=fixture();assert.equal((await f.handler(f.req({}))).status,401);assert.equal(f.calls.length,0);
+const optionsRequest=new Request('https://mock.example/functions/v1/creator-followers',{method:'OPTIONS',headers:{Origin:'https://lixi423y-web.github.io'}});
+let preflight=await f.handler(optionsRequest);assert.equal(preflight.status,204);assert.equal(preflight.headers.get('X-CRM-Followers-Configured'),'true');assert.equal(f.calls.length,0);assert.equal(await preflight.text(),'');
+let missing=fixture({env:{APIFY_TOKEN:''}});preflight=await missing.handler(optionsRequest);assert.equal(preflight.headers.get('X-CRM-Followers-Configured'),'false');assert.equal(missing.calls.length,0);
 f=fixture({userId:id});assert.equal((await f.handler(f.req())).status,403);assert.equal(f.calls.length,1);
 f=fixture({authStatus:401});assert.equal((await f.handler(f.req())).status,401);assert.equal(f.calls.length,1);
 f=fixture();assert.equal((await f.handler(f.req({Authorization:'Bearer synthetic-session',Origin:'https://evil.example'}))).status,403);assert.equal(f.calls.length,0);
