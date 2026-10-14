@@ -1,7 +1,8 @@
 import{shippingAddressText,copyShippingAddress}from'./shipping-address.js';
+import{startFollowerEnrichment}from'./follower-enrichment.js';
 import{instagramHandle,accountKey}from'./identity.js';
 import{OUTREACH_STATUSES,COLLABORATION_STAGES,FIT_VERDICTS,TIERS,ACCOUNT_TYPES,DOG_SIZES,RELATIONSHIPS,SHIPMENT_STATUSES,DELIVERABLE_STATUSES,PUBLICATION_STATUSES,RIGHTS_STATUSES,PAYMENT_STATUSES,DEFAULT_PAGE_SIZE,PAGE_SIZES,badgeClass}from'./constants.js?v=20260813-import1';
-import{findCreatorDuplicates,dataMode,currentSession,restoreSession,signInWithPassword,signOut,onAuthStateChange,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,creatorAddressSnapshot,related,getOne,save,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,syncCollaborationStageForRecord,dashboardCounts,exportCreatorResults,exportCollaborationResults}from'./data.js?v=20261011-follower-display1';
+import{autoFollowersEnabled,fetchCreatorFollowers,findCreatorDuplicates,dataMode,currentSession,restoreSession,signInWithPassword,signOut,onAuthStateChange,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,creatorAddressSnapshot,related,getOne,save,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,syncCollaborationStageForRecord,dashboardCounts,exportCreatorResults,exportCollaborationResults}from'./data.js?v=20261011-follower-autofetch1';
 
 const $=(selector,root=document)=>root.querySelector(selector);const $$=(selector,root=document)=>[...root.querySelectorAll(selector)];
 const CREATOR_SORT_DEFAULTS={display_name:'asc',primary_handle:'asc',created_at:'desc',last_contact_at:'desc',collaboration_count:'desc'};
@@ -9,7 +10,7 @@ const UI_STATE_KEY='matchmate-crm-ui-location-v1',VALID_VIEWS=['dashboard','crea
 function readUiState(){try{return JSON.parse(sessionStorage.getItem(UI_STATE_KEY)||'{}')}catch{return{}}}
 const initialUi=readUiState();
 const state={view:VALID_VIEWS.includes(initialUi.view)?initialUi.view:'dashboard',creators:[],creatorCount:0,creatorPage:1,creatorPageSize:DEFAULT_PAGE_SIZE,creatorSort:'created_at.desc',creatorFilters:{},creatorSelection:new Set(),creatorImport:{rows:[],existing:[],mode:'skip'},collaborations:[],collaborationCount:0,collaborationPage:1,collaborationPageSize:DEFAULT_PAGE_SIZE,collaborationFilters:{},refs:{owners:[],campaigns:[],products:[],creatorOptions:[]},drawer:null,drawerTab:'profile',saving:false,actionBusy:false,draft:null,request:{creator:0,collaboration:0,detail:0,drawerRender:0}};
-let toastTimer,appStarted=false;
+let toastTimer,appStarted=false,authGeneration=0;
 
 boot();
 async function boot(){
@@ -31,7 +32,7 @@ async function login(event){
 }
 async function logout(){const button=$('#logoutBtn');button.disabled=true;showLogin();try{await signOut()}catch(error){console.error(error);showLoginError('Signed out locally. Refresh before signing in again.')}finally{button.disabled=false}}
 function showLoginError(text){const error=$('#loginError');error.textContent=text;error.classList.toggle('hidden',!text)}
-function showLogin(error=''){appStarted=false;clearCrmData();$('#app').classList.add('hidden');$('#authGate').classList.remove('hidden');$('#loginPassword').value='';setPasswordVisibility(false);showLoginError(error)}
+function showLogin(error=''){authGeneration++;appStarted=false;clearCrmData();$('#app').classList.add('hidden');$('#authGate').classList.remove('hidden');$('#loginPassword').value='';setPasswordVisibility(false);showLoginError(error)}
 function clearCrmData(){
   state.creators=[];state.creatorCount=0;state.collaborations=[];state.collaborationCount=0;state.creatorSelection.clear();state.creatorImport={rows:[],existing:[],mode:'skip'};state.refs={owners:[],campaigns:[],products:[],creatorOptions:[]};state.drawer=null;state.draft=null;state.request.creator++;state.request.collaboration++;state.request.detail++;state.request.drawerRender++;
   $('#drawer').classList.remove('open');$('#drawer').setAttribute('aria-hidden','true');for(const id of ['dashboardCards','bottleneckNote','outreachTasks','collaborationTasks','creatorProgress','productMix','creatorRows','creatorPagination','collaborationRows','collaborationPagination','drawerBody','drawerFooter']){const node=$(`#${id}`);if(node)node.textContent=''}
@@ -173,6 +174,13 @@ async function saveDrawer(type){
   },{afterSuccess:async value=>{clearDraftGuard();if(type==='creator'){state.creatorPage=1;await refreshViews({dashboard:true,creators:true});await openCreator(value.record.id)}else{await refreshViews({dashboard:true,creators:true,collaborations:true});await openCollaboration(value.record.id)}}});
   if(!result.ok){if(type==='creator'&&!before&&!result.completed)await checkCreatorDuplicate().catch(()=>{});return;}
   toast(result.value.activityWarning?'Saved. Activity history could not be recorded.':before?'Changes saved.':type==='creator'?'Creator added at the top.':'Collaboration created.');
+  if(type==='creator'&&!before){
+    const loginEpoch=authGeneration,userId=currentSession()?.user?.id;
+    void startFollowerEnrichment({creatorId:result.value.record.id,enabled:autoFollowersEnabled,fetchFollowers:fetchCreatorFollowers,
+      isActive:()=>appStarted&&currentSession()?.user?.id===userId&&authGeneration===loginEpoch,
+      onUpdated:async()=>{if(state.view==='creators')await loadCreators();if(appStarted&&authGeneration===loginEpoch)toast('Followers updated automatically.');},
+      onPending:()=>toast('Creator saved. Followers unavailable; you can add them later.')});
+  }
 }
 
 async function openCollaboration(id,tab='overview',editing=false){const token=++state.request.detail;state.drawer=null;openDrawer('Collaboration','Loading…','');clearDrawerContent('Loading collaboration…');try{const c=await getOne('collaborations',id);if(token!==state.request.detail)return;if(!c)throw new Error('Collaboration not found.');if(c.creator_id&&!state.refs.creatorOptions.some(row=>row.id===c.creator_id)){const creator=await getOne('creators',c.creator_id);if(token!==state.request.detail)return;if(creator)state.refs.creatorOptions.push(creator)}state.drawer={type:'collaboration',record:c};state.drawerTab=tab;rememberUiState();renderCollaborationDrawer(editing)}catch(error){if(token===state.request.detail){clearDrawerContent('Unable to load this collaboration.');handleError(error)}}}
