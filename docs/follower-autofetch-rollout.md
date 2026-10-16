@@ -1,5 +1,21 @@
 # Automatic followers — guarded Free-plan trial
 
+## Live failure diagnosis — 2026-10-16
+
+User reported missing followers for `janasosta`. Targeted read confirmed account
+was created at 08:11:10 UTC with followers null. Logs confirmed OPTIONS 204 and
+POST 200 but no persisted count. A backend-only, non-scraping startup health check
+then returned `{configured:true,httpStatus:401}` from Apify `users/me`.
+Configuration presence was not sufficient proof of valid provider authentication.
+Blocked on user replacing `APIFY_TOKEN` directly in Supabase with a valid Apify
+credential; no secret values were read or logged. Do not recreate the creator,
+overwrite followers with zero, or claim automatic fetching works yet.
+Function v4 retains gateway JWT verification and all existing Auth/RLS checks.
+The diagnostic logs only boolean checks/status codes; it does not scrape or modify
+CRM data. The backend currently accepts only accounts created within 10 minutes,
+so a failed older creator will need a deliberate authenticated retry path after
+provider authentication is corrected. That retry path is not implemented yet.
+
 ## Current verified status — 2026-10-14
 
 Supabase connection verified; project `kcibsvltzcjpnuqnzfld` is ACTIVE_HEALTHY.
