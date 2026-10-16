@@ -362,9 +362,13 @@ function summarizeDashboard({totalCreators,outreach=[],collaborations=[],shipmen
   shipments=shipments.filter(row=>activeIds.has(row.collaboration_id));deliverables=deliverables.filter(row=>activeIds.has(row.collaboration_id));publications=publications.filter(row=>activeIds.has(row.collaboration_id));collaborationProducts=collaborationProducts.filter(row=>activeIds.has(row.collaboration_id));
   const latestOutreach=new Map();
   [...outreach].sort((a,b)=>stamp(b)-stamp(a)).forEach(row=>{if(!latestOutreach.has(row.creator_id))latestOutreach.set(row.creator_id,row)});
-  const outreachRows=[...latestOutreach.values()],contacted=new Set(outreachRows.filter(row=>row.status&&row.status!=='Not Contacted').map(row=>row.creator_id));
-  const repliedStatuses=new Set(['Replied','Negotiating','Converted']),replied=new Set(outreachRows.filter(row=>repliedStatuses.has(row.status)).map(row=>row.creator_id));
+  const outreachRows=[...latestOutreach.values()],contacted=new Set(outreach.filter(row=>row.creator_id&&row.status&&row.status!=='Not Contacted').map(row=>row.creator_id));
+  const repliedStatuses=new Set(['Replied','Negotiating','Converted']),replied=new Set(outreach.filter(row=>row.creator_id&&repliedStatuses.has(row.status)).map(row=>row.creator_id));
   const collaborationCreators=new Set(activeCollaborations.map(row=>row.creator_id).filter(Boolean)),collaborationIds=activeIds;
+  // Funnel evidence is cumulative: confirmed collaboration implies reply and contact.
+  // A later follow-up must not erase an earlier reply; repeat rounds count once.
+  collaborationCreators.forEach(id=>replied.add(id));
+  replied.forEach(id=>contacted.add(id));
   const latestShipment=new Map();
   [...shipments].sort((a,b)=>stamp(b)-stamp(a)).forEach(row=>{if(!latestShipment.has(row.collaboration_id))latestShipment.set(row.collaboration_id,row)});
   const shipmentRows=[...latestShipment.values()],shippedIds=new Set(shipmentRows.filter(row=>['Shipped','Delivered'].includes(row.status)).map(row=>row.collaboration_id)),deliveredIds=new Set(shipmentRows.filter(row=>row.status==='Delivered').map(row=>row.collaboration_id));
