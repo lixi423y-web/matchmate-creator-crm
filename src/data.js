@@ -12,9 +12,9 @@ const supabase=cfg.supabaseUrl&&publishableKey&&window.supabase?.createClient?wi
 export const dataMode=demoMode?'demo':'live';
 export function currentSession(){return session}
 export const autoFollowersEnabled=!demoMode&&cfg.creatorFollowersAutoFetch===true;
-export async function fetchCreatorFollowers(creatorId){
+export async function fetchCreatorFollowers(creatorId,{retry=false}={}){
   if(!autoFollowersEnabled)return{status:'disabled'};
-  const response=await fetch(`${cfg.supabaseUrl}/functions/v1/creator-followers`,{method:'POST',headers:headers(),body:JSON.stringify({creatorId}),signal:requestController.signal});
+  const response=await fetch(`${cfg.supabaseUrl}/functions/v1/creator-followers`,{method:'POST',headers:headers(),body:JSON.stringify(retry?{creatorId,retry:true}:{creatorId}),signal:requestController.signal});
   if(!response.ok)return{status:'pending'};
   return response.json();
 }

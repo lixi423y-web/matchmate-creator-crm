@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
 import {createHandler,runtimeEnv,SHARED_CRM_USER_ID} from '../supabase/functions/creator-followers/handler.mjs';
 import {startFollowerEnrichment} from '../src/follower-enrichment.js';
 const id='aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',accountId='bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
@@ -17,12 +18,12 @@ function fixture(overrides={}){
     if(url.includes('api.apify.com')){assert.equal(options.headers.Authorization,'Bearer synthetic-provider');assert.ok(!url.includes('token='));}
     else{assert.equal(options.headers.Authorization,'Bearer synthetic-session');assert.equal(options.headers.apikey,'synthetic-public');}
     if(url.endsWith('/auth/v1/user'))return Response.json({id:overrides.userId||SHARED_CRM_USER_ID},{status:overrides.authStatus||200});
-    if(url.includes('/users/me'))return Response.json({data:{isPaying:false,plan:{id:'FREE',monthlyBasePriceUsd:0},...overrides.billing}});
+    if(url.includes('/users/me'))return Response.json({data:{isPaying:false,plan:{id:'FREE',monthlyBasePriceUsd:0},...overrides.billing}},{status:overrides.providerAuthStatus||200});
     if(url.includes('/acts/')){assert.deepEqual(JSON.parse(options.body),{usernames:['test_creator']});assert.equal(new URL(url).searchParams.get('maxTotalChargeUsd'),'0.01');assert.equal(new URL(url).searchParams.get('timeout'),'30');if(overrides.fail)throw Error('provider failure must not leak');return Response.json(overrides.output??[{userName:'test_creator',followersCount:12345}]);}
     if(options.method==='PATCH'){const q=new URL(url).searchParams;assert.equal(q.get('followers'),'is.null');assert.equal(q.get('handle'),'eq.test_creator');assert.deepEqual(JSON.parse(options.body),{followers:overrides.count??12345});return Response.json(overrides.concurrentEdit?[]:[{id:accountId}]);}
     return Response.json([{id:accountId,creator_id:id,handle:'test_creator',followers:null,created_at:new Date().toISOString(),...overrides.account}]);
   }});
-  const req=(headers={Authorization:'Bearer synthetic-session'})=>new Request('https://mock.example/functions/v1/creator-followers',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify({creatorId:id})});
+  const req=(headers={Authorization:'Bearer synthetic-session'},extra={})=>new Request('https://mock.example/functions/v1/creator-followers',{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify({creatorId:id,...extra})});
   return{calls,handler,req};
 }
 let f=fixture();assert.equal((await f.handler(f.req({}))).status,401);assert.equal(f.calls.length,0);
@@ -42,6 +43,10 @@ f=fixture();assert.deepEqual(await(await f.handler(f.req())).json(),{status:'upd
 f=fixture({count:0,output:[{userName:'test_creator',followersCount:0}]});assert.equal((await(await f.handler(f.req())).json()).followers,0);
 f=fixture({concurrentEdit:true});assert.equal((await(await f.handler(f.req())).json()).status,'unchanged');
 f=fixture({fail:true});assert.equal((await(await f.handler(f.req())).json()).status,'pending');assert.ok(!f.calls.some(x=>x.options.method==='PATCH'));
+f=fixture({account:{created_at:'2020-01-01'}});assert.equal((await(await f.handler(f.req(undefined,{retry:true}))).json()).status,'updated');
+f=fixture({userId:id,account:{created_at:'2020-01-01'}});assert.equal((await f.handler(f.req(undefined,{retry:true}))).status,403);assert.equal(f.calls.length,1);
+f=fixture({providerAuthStatus:401});assert.equal((await(await f.handler(f.req())).json()).reason,'provider_auth_failed');assert.ok(!f.calls.some(x=>x.url.includes('/acts/')));
+f=fixture({fail:true});await f.handler(f.req());await f.handler(f.req(undefined,{retry:true}));assert.equal(f.calls.filter(x=>x.url.includes('/acts/')).length,2);
 let active=true,updates=0,pending=0,queries=0;
 const args={creatorId:id,enabled:true,isActive:()=>active,fetchFollowers:async()=>{queries++;return{status:'updated'}},onUpdated:()=>updates++,onPending:()=>pending++};
 await startFollowerEnrichment({...args,enabled:false});assert.equal(queries,0);
@@ -58,3 +63,11 @@ globalThis.location={search:''};let apiCalls=0;
 globalThis.fetch=async(url,options)=>{apiCalls++;assert.ok(url.endsWith('/functions/v1/creator-followers'));assert.equal(options.headers.Authorization,'Bearer synthetic-session');assert.deepEqual(JSON.parse(options.body),{creatorId:id});return Response.json({status:'updated',followers:12345});};
 const data=await import('../src/data.js');await assert.rejects(data.fetchCreatorFollowers(id),/session expired/);assert.equal(apiCalls,0);await data.restoreSession();await data.fetchCreatorFollowers(id);assert.equal(apiCalls,1);await data.signOut();await assert.rejects(data.fetchCreatorFollowers(id),/session expired/);assert.equal(apiCalls,1);
 console.log('Follower autofetch: auth, shared-user restriction, Free-only guard, valid counts, conditional writes, dedupe, isolated failures, logout and opt-in passed.');
+assert.ok(app.includes("button.textContent='补查'"));assert.ok(app.includes('fetchCreatorFollowers(row.id,{retry:true})'));
+const retryRow={id,primary_platform:'Instagram',primary_followers:null},tr={dataset:{id}},target={button:null,append(space,button){this.button=button;}},handlers={};
+let retryCalls=0,listRefreshes=0;
+const context=vm.createContext({autoFollowersEnabled:true,appStarted:true,authGeneration:1,state:{creators:[retryRow],view:'creators'},document:{createElement:()=>({addEventListener:(event,callback)=>handlers[event]=callback})},$$:()=>[tr],$:(selector,root)=>selector==='.creator-followers'?target:root.button,formatFollowers:String,toast:()=>{},loadCreators:async()=>{listRefreshes++;},fetchCreatorFollowers:async(creatorId,options)=>{retryCalls++;assert.equal(creatorId,id);assert.equal(options.retry,true);return{status:'updated',followers:13371};}});
+vm.runInContext(app.slice(app.indexOf('function bindFollowerRetries('),app.indexOf('async function createQuickOrder(')),context);
+vm.runInContext('bindFollowerRetries()',context);assert.ok(target.button);assert.equal(retryCalls,0,'Rendering must not start scraping');
+await handlers.click({stopPropagation(){}});assert.equal(retryCalls,1);assert.equal(listRefreshes,1);assert.equal(target.button.disabled,false);
+target.button=null;retryRow.primary_followers=0;vm.runInContext('bindFollowerRetries()',context);assert.equal(target.button,null,'Zero is a known value, not retry eligible');

@@ -51,7 +51,7 @@ export function createHandler({env,fetchImpl=fetch,now=Date.now}={}){
       if(account.followers!=null)return reply(200,{status:'existing'});
       // This endpoint is for newly added creators, not an arbitrary scraping/backfill API.
       const age=now()-Date.parse(account.created_at);
-      if(!HANDLE.test(handle)||!Number.isFinite(age)||age< -60000||age>600000)return reply(200,{status:'pending',reason:'not_new'});
+      if(!HANDLE.test(handle)||!Number.isFinite(age)||age< -60000||(age>600000&&body.retry!==true))return reply(200,{status:'pending',reason:'not_new'});
       const prior=attempts.get(account.id);
       if(prior)return reply(200,await prior);
       for(const[id,item]of attempts){if(item.startedAt<now()-600000)attempts.delete(id)}
@@ -61,7 +61,7 @@ export function createHandler({env,fetchImpl=fetch,now=Date.now}={}){
           const providerHeaders={Authorization:`Bearer ${env('APIFY_TOKEN')}`,'Content-Type':'application/json'};
           const provider=(url,options={})=>fetchImpl(url,{...options,headers:providerHeaders,signal:AbortSignal.timeout(45000),redirect:'error'});
           const info=await provider('https://api.apify.com/v2/users/me');
-          if(!info.ok)return{status:'pending',reason:'provider_unavailable'};
+          if(!info.ok)return{status:'pending',reason:[401,403].includes(info.status)?'provider_auth_failed':'provider_unavailable'};
           const{data:billing}=await info.json();
           // Fail closed on paid/unknown plans; never auto-upgrade or fall back to paid access.
           if(billing?.isPaying!==false||String(billing?.plan?.id||'').toLowerCase()!=='free'||billing?.plan?.monthlyBasePriceUsd!==0)return{status:'pending',reason:'free_plan_required'};
@@ -79,7 +79,9 @@ export function createHandler({env,fetchImpl=fetch,now=Date.now}={}){
         }catch{return{status:'pending',reason:'unavailable'}}
       })();
       task.startedAt=now();attempts.set(account.id,task);
-      return reply(200,await task);
+      const result=await task;
+      if(result.status==='pending')attempts.delete(account.id);
+      return reply(200,result);
     }catch{return reply(503,{status:'pending',reason:'unavailable'})}
   };
 }

@@ -2,7 +2,7 @@ import{shippingAddressText,copyShippingAddress}from'./shipping-address.js';
 import{startFollowerEnrichment}from'./follower-enrichment.js';
 import{instagramHandle,accountKey}from'./identity.js';
 import{OUTREACH_STATUSES,COLLABORATION_STAGES,FIT_VERDICTS,TIERS,ACCOUNT_TYPES,DOG_SIZES,RELATIONSHIPS,SHIPMENT_STATUSES,DELIVERABLE_STATUSES,PUBLICATION_STATUSES,RIGHTS_STATUSES,PAYMENT_STATUSES,DEFAULT_PAGE_SIZE,PAGE_SIZES,badgeClass}from'./constants.js?v=20260813-import1';
-import{autoFollowersEnabled,fetchCreatorFollowers,findCreatorDuplicates,dataMode,currentSession,restoreSession,signInWithPassword,signOut,onAuthStateChange,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,creatorAddressSnapshot,related,getOne,save,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,syncCollaborationStageForRecord,dashboardCounts,exportCreatorResults,exportCollaborationResults}from'./data.js?v=20261016-funnel1';
+import{autoFollowersEnabled,fetchCreatorFollowers,findCreatorDuplicates,dataMode,currentSession,restoreSession,signInWithPassword,signOut,onAuthStateChange,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,creatorAddressSnapshot,related,getOne,save,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,syncCollaborationStageForRecord,dashboardCounts,exportCreatorResults,exportCollaborationResults}from'./data.js?v=20261016-followers-retry1';
 
 const $=(selector,root=document)=>root.querySelector(selector);const $$=(selector,root=document)=>[...root.querySelectorAll(selector)];
 const CREATOR_SORT_DEFAULTS={display_name:'asc',primary_handle:'asc',created_at:'desc',last_contact_at:'desc',collaboration_count:'desc'};
@@ -109,8 +109,30 @@ function taskRows(rows){return rows.map(([label,value])=>`<div class="task-row">
 async function loadCreators(){const token=++state.request.creator;setStatus('Loading creators');try{const{search='',...filters}=state.creatorFilters;const result=await creatorPage({page:state.creatorPage,pageSize:state.creatorPageSize,search,filters,sort:state.creatorSort,includeFollowers:true});if(token!==state.request.creator)return;state.creators=result.data;state.creatorCount=result.count;renderCreators();setStatus(`${result.count} creators`)}catch(error){handleError(error)}}
 function formatFollowers(value){const count=Number(value);return value==null||value===''||!Number.isSafeInteger(count)||count<0?'—':count.toLocaleString('en-US')}
 function renderCreators(){
+  queueMicrotask(bindFollowerRetries);
   $('#creatorRows').innerHTML=state.creators.length?state.creators.map(row=>{const account=row.creator_accounts?.find(x=>x.is_primary)||row.creator_accounts?.[0]||{handle:row.primary_handle,platform:row.primary_platform,profile_url:row.primary_profile_url};const outreach=row.outreach_records?.[0]||{status:row.outreach_status,last_contact_at:row.last_contact_at};const profile=creatorProfileUrl(account?.profile_url,account?.handle||row.nickname,account?.platform);return`<tr data-id="${row.id}"><td><input class="creator-check" type="checkbox" ${state.creatorSelection.has(row.id)?'checked':''}></td><td class="creator-cell"><strong>${esc(row.display_name||row.nickname||'Unnamed')}</strong><small>${esc(row.creator_code||'')} · ${esc(row.location||'No location')}</small></td><td><strong>${esc(account?.handle?`@${account.handle}`:'—')}</strong><br><small class="muted">${esc(account?.platform||'')}</small><br><small class="muted creator-followers">Followers: ${formatFollowers(row.primary_followers??account?.followers)}</small></td><td><span class="badge ${badgeClass(row.fit_verdict)}">${esc(row.fit_verdict||'Not rated')}</span></td><td><span class="badge ${badgeClass(outreach?.status)}">${esc(outreach?.status||'Not Contacted')}</span></td><td>${esc(ownerName(row.owner_id))}</td><td>${date(row.created_at)}</td><td>${date(outreach?.last_contact_at)}</td><td>${row.collaboration_count||row.collaborations?.length||0}</td><td><div class="row-actions"><button class="secondary compact open-row" type="button">Open</button><button class="secondary compact new-order-row" type="button" title="Create a confirmed collaboration for this creator">+ Order</button>${profileAction(profile)}</div></td></tr>`}).join(''):'<tr><td colspan="10"><div class="empty-state">No creators match these filters.</div></td></tr>';
   $$('#creatorRows tr[data-id]').forEach(tr=>{const id=tr.dataset.id,row=state.creators.find(item=>item.id===id);$('.creator-check',tr).addEventListener('click',event=>{event.stopPropagation();event.target.checked?state.creatorSelection.add(id):state.creatorSelection.delete(id);renderSelectionCount()});$('.open-row',tr).addEventListener('click',()=>discardChangesThen(()=>openCreator(id)));$('.new-order-row',tr).addEventListener('click',event=>{event.stopPropagation();discardChangesThen(()=>createQuickOrder(row,event.currentTarget))});bindProfileLinks(tr);tr.addEventListener('dblclick',()=>discardChangesThen(()=>openCreator(id)))});renderSelectionCount();renderPagination('creator')
+}
+function bindFollowerRetries(){
+  if(!autoFollowersEnabled)return;
+  $$('#creatorRows tr[data-id]').forEach(tr=>{
+    const row=state.creators.find(item=>item.id===tr.dataset.id),target=$('.creator-followers',tr);
+    if(!row||!target||row.primary_platform!=='Instagram'||row.primary_followers!=null||$('.retry-followers',target))return;
+    const button=document.createElement('button');button.type='button';button.className='secondary compact retry-followers';button.textContent='补查';button.title='Only fills missing followers using the free allowance';target.append(' ',button);
+    button.addEventListener('dblclick',event=>event.stopPropagation());
+    button.addEventListener('click',async event=>{
+      event.stopPropagation();button.disabled=true;button.textContent='查询中…';const epoch=authGeneration;
+      try{
+        const result=await fetchCreatorFollowers(row.id,{retry:true});
+        if(!appStarted||authGeneration!==epoch)return;
+        if(['updated','existing','unchanged'].includes(result.status)){
+          if(state.view==='creators')await loadCreators();
+          if(appStarted&&authGeneration===epoch)toast(result.status==='updated'?`粉丝数已更新：${formatFollowers(result.followers)}`:'已有值保持不变，列表已刷新。');
+        }else toast(result.reason==='provider_auth_failed'?'查询服务认证失败，请检查 Apify Token。':result.reason==='free_plan_required'?'当前未通过免费套餐检查，未启动查询。':'暂时未能取得粉丝数，可稍后再补查。');
+      }catch{if(appStarted&&authGeneration===epoch)toast('补查未完成，达人资料不受影响。')}
+      finally{button.disabled=false;button.textContent='补查'}
+    });
+  });
 }
 async function createQuickOrder(creator,button){const name=creator.display_name||creator.nickname||creator.primary_handle||'this creator';if(!confirm(`Create an order for ${name}? Products, address and due date can be added later.`))return;const result=await runAction(button,'Creating order',()=>createOrderForCreator(creator.id,creator.owner_id||null),{buttonText:'Creating…',afterSuccess:async record=>{await refreshViews({dashboard:true,creators:true,collaborations:true});await openCollaboration(record.id)}});if(!result.ok)return;toast('Order created. Add the remaining details when ready.')}
 function renderSelectionCount(){$('#creatorSelectionCount').textContent=`${state.creatorSelection.size} selected`;const control=$('#selectPageCheck'),selected=state.creators.filter(row=>state.creatorSelection.has(row.id)).length;control.checked=state.creators.length>0&&selected===state.creators.length;control.indeterminate=selected>0&&selected<state.creators.length;control.disabled=!state.creators.length}

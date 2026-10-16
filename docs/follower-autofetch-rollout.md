@@ -1,5 +1,25 @@
 # Automatic followers — guarded Free-plan trial
 
+## Credential correction and targeted recovery — 2026-10-16
+
+User replaced the Token directly in Supabase. Backend-only health check now
+returned HTTP 200 with all three Free-plan predicates true. The credential value
+was never read, copied or logged. An operator-directed, temporary public-profile
+probe queried only `janasosta` under a $0.01 per-run cap, verified the returned
+username and exact integer count 13,371, and was immediately removed/restored to
+the normal protected entrypoint. No scraping probe remains in deployed source.
+The single identified primary-account row was updated to 13,371 only while its
+followers remained null and its ID, creator, handle and active/primary state still
+matched. A separate SELECT confirmed the saved result. Other business fields were
+not changed. This operator recovery is not proof of a new-creator authenticated
+automatic fetch completing end-to-end; that final normal-flow acceptance remains.
+
+The list now offers `补查` only for missing Instagram counts. This explicit retry
+uses the caller's session, shared-user restriction and existing RLS, allows an older
+existing creator account, keeps the free-only charge guard, and still conditionally
+fills null only. Browsing/refreshing the list does not automatically retry old rows.
+No column redesign or new public permissions were introduced.
+
 ## Live failure diagnosis — 2026-10-16
 
 User reported missing followers for `janasosta`. Targeted read confirmed account
