@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+const app=await readFile(new URL('../src/app.js',import.meta.url),'utf8');
+const context=vm.createContext({});
+for(const name of ['esc','attr','creatorProfileUrl','accountProfileLink','bindProfileLinks'])vm.runInContext(app.split('\n').find(line=>line.startsWith(`function ${name}(`)),context);
+function render(account){context.account=account;return vm.runInContext('accountProfileLink(account,creatorProfileUrl(account.profile_url,account.handle,account.platform))',context);}
+const instagram=render({handle:'janasosta',platform:'Instagram'});
+assert.ok(instagram.includes('href="https://www.instagram.com/janasosta/"'));
+assert.ok(instagram.includes('>@janasosta</a>'));
+assert.ok(instagram.includes('target="_blank"'));assert.ok(instagram.includes('rel="noopener noreferrer"'));
+assert.ok(render({handle:'dog',platform:'TikTok',profile_url:'https://www.tiktok.com/@dog'}).includes('href="https://www.tiktok.com/@dog"'));
+assert.equal(render({handle:'dog',platform:'TikTok'}),'@dog','Do not invent missing non-Instagram URLs');
+assert.equal(render({}), '—');
+assert.ok(!render({handle:'dog',platform:'Instagram',profile_url:'javascript:alert(1)'}).includes('javascript:'));
+assert.ok(!render({handle:'<img src=x onerror=alert(1)>',platform:'Instagram'}).includes('<img'));
+assert.ok(app.includes('${accountProfileLink(account,profile)}'));
+let stopped=0,prevented=0;const handlers={};context.$$=()=>[{addEventListener:(type,callback)=>handlers[type]=callback}];vm.runInContext('bindProfileLinks({})',context);
+for(const type of ['click','dblclick'])handlers[type]({stopPropagation:()=>stopped++,preventDefault:()=>prevented++});
+assert.equal(stopped,2);assert.equal(prevented,0,'Preserve native link navigation, modifier-click and keyboard activation');
+console.log('Account links: saved platform URL, Instagram fallback, safe HTML, new tab, no row activation, missing URL fallback passed.');

@@ -75,6 +75,7 @@
 .address-tools{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:8px 0}
 .address-tools [role="status"]{font-size:13px;color:#466177}
 .shipping-address textarea{width:100%;line-height:1.6}
+.account-profile-link{display:inline;border:0;border-radius:0;background:transparent;padding:0;color:var(--blue);font:inherit;white-space:normal}.account-profile-link:hover{background:transparent;text-decoration:underline}.account-profile-link:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:2px}
 
 
 /* Creator list filters and conventional numbered pagination. */
