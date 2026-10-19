@@ -16,7 +16,7 @@ const products=[
   {id:'prod-ocean-necklace',sku:'OP-NEC',name:'Ocean Pearl Necklace',category:'Necklace'},
   {id:'prod-emerald-necklace',sku:'ED-NEC',name:'Emerald Dew Necklace',category:'Necklace'}
 ];
-export function demoDatabase(size=1000){
+export function demoDatabase(size=1000,{skuPreview=false}={}){
   const creators=Array.from({length:size},(_,i)=>({
     id:`creator-${i+1}`,creator_code:`CR-${String(i+1).padStart(5,'0')}`,handle:`creator_${i+1}`,display_name:`Creator ${i+1}`,nickname:`creator_${i+1}`,
     location:i%7?'United States':'New York, United States',timezone:'America/New_York',languages:['English'],preferred_contact_method:'Instagram DM',contact_email:`creator${i+1}@example.com`,relationship_status:i%11===0?'Repeat Partner':'New',fit_verdict:FIT_VERDICTS[i%4],fit_notes:i%4===0?'Polished owner + pet content.':'Review recent feed.',tier:['A','B','C'][i%3],account_type:ACCOUNT_TYPES[i%4],appearance:i%3===0?'Human + Pet':'Human Only',dog_size:DOG_SIZES[i%4],source_group:i%2?'Benchmark brand':'Organic search',followers:400+(i*137)%9600,owner_id:i%2?'owner-ivy':'owner-team',tags:i%5===0?['fashion','repeat']:['seeding'],do_not_contact:false,created_at:new Date(2026,0,1+i%180).toISOString(),updated_at:new Date(2026,6,1+i%28).toISOString()
@@ -29,6 +29,14 @@ export function demoDatabase(size=1000){
   const collaboration_products=collaborations.map((c,i)=>({id:`cp-${i+1}`,collaboration_id:c.id,product_id:products[i%products.length].id,quantity:1,is_primary:true,product:products[i%products.length]}));
   const shipments=collaborations.filter((_,i)=>i%2===0).map((c,i)=>({id:`shipment-${i+1}`,shipment_code:`SH-${String(i+1).padStart(5,'0')}`,collaboration_id:c.id,status:SHIPMENT_STATUSES_FOR_DEMO[i%4],carrier:'USPS',tracking_number:`9500${String(i+1).padStart(18,'0')}`,shipped_at:'2026-07-20',delivered_at:i%3?'2026-07-24':null,address_snapshot:{line:'Demo address'},created_at:c.created_at}));
   const deliverables=collaborations.map((c,i)=>({id:`deliverable-${i+1}`,collaboration_id:c.id,type:i%2?'Instagram Reel':'Instagram Post',status:i%4===0?'Published':'Pending',due_at:'2026-08-15'}));
+  if(skuPreview&&collaborations.length>=3){
+    const c=collaborations[2];c.collaboration_name='Demo · Previously shipped';c.stage='Delivered';
+    const shipment=shipments.find(row=>row.collaboration_id===c.id);if(shipment){shipment.status='Delivered';shipment.delivered_at='2026-07-24'}
+    const original=collaboration_products.find(row=>row.collaboration_id===c.id);
+    const bandana=products.find(row=>row.sku==='MS-BAN'),scrunchie=products.find(row=>row.sku==='MS-SCR');
+    Object.assign(original,{product_id:bandana.id,product:bandana,quantity:2});
+    collaboration_products.push({id:'cp-sku-preview',collaboration_id:c.id,product_id:scrunchie.id,product:scrunchie,quantity:3,is_primary:false});
+  }
   return{creators,creator_accounts,creator_pets,creator_addresses:[],outreach_records,collaborations,collaboration_products,shipments,shipment_items:[],inventory_movements:[],deliverables,publications:[],assets:[],activity_logs:[],products,campaigns:[{id:'campaign-founding',name:'Founding Matchmates'},{id:'campaign-repeat',name:'Repeat Seeding'}],owners:[{id:'owner-ivy',name:'Ivy'},{id:'owner-team',name:'Team'}]};
 }
 const SHIPMENT_STATUSES_FOR_DEMO=['Draft','Ready','Shipped','Delivered'];

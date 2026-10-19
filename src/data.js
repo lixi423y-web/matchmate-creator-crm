@@ -4,7 +4,7 @@ import{instagramHandle,accountKey,creatorSearch,validateInstagramAccount}from'./
 const cfg=window.MATCHMATE_CONFIG||{};
 const publishableKey=cfg.supabasePublishableKey||cfg.supabaseAnonKey||'';
 const demoMode=new URLSearchParams(location.search).get('demo')==='1'||!cfg.supabaseUrl||!publishableKey;
-const demo=demoMode?demoDatabase(Number(new URLSearchParams(location.search).get('size'))||1000):null;
+const demo=demoMode?demoDatabase(Number(new URLSearchParams(location.search).get('size'))||1000,{skuPreview:new URLSearchParams(location.search).get('preview')==='sku'}):null;
 let session=null;
 let requestController=new AbortController();
 const supabase=cfg.supabaseUrl&&publishableKey&&window.supabase?.createClient?window.supabase.createClient(cfg.supabaseUrl,publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}):null;
@@ -156,7 +156,13 @@ export async function count(table,filters={}){
 export async function collaborationPage(options={}){
   if(demoMode){let rows=demo.collaborations.map(row=>hydrateCollaboration(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,v])=>v!==''&&v!=null).forEach(([key,value])=>{rows=rows.filter(row=>key==='product_id'?row.collaboration_products.some(item=>item.product_id===value):String(row[key]??'')===String(value))});const[field,direction]=sort.split('.');rows.sort((a,b)=>String(a[field]||'').localeCompare(String(b[field]||''))*(direction==='asc'?1:-1));return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
   const query=encodeListQuery({...options,searchFields:['collaboration_code','collaboration_name','creator_name','creator_handle','campaign_name','product_names']});
-  return request(`collaboration_directory?${query}`,{headers:{Prefer:'count=exact'}});
+  const result=await request(`collaboration_directory?${query}`,{headers:{Prefer:'count=exact'}});
+  if(result.data?.length){
+    const items=[];
+    for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`collaboration_products?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=collaboration_id,product_id,quantity,product:products(id,sku,name,category)&limit=1000`);items.push(...(page.data||[]))}
+    result.data=result.data.map(row=>({...row,collaboration_products:items.filter(item=>item.collaboration_id===row.id)}));
+  }
+  return result;
 }
 function hydrateCollaboration(row){const creator=demo.creators.find(c=>c.id===row.creator_id),creator_account=demo.creator_accounts.find(x=>x.creator_id===row.creator_id&&x.is_primary)||demo.creator_accounts.find(x=>x.creator_id===row.creator_id);return{...row,creator,creator_account,creator_name:creator?.display_name,creator_handle:creator_account?.handle,creator_profile_url:creator_account?.profile_url,campaign:demo.campaigns.find(c=>c.id===row.campaign_id),collaboration_products:demo.collaboration_products.filter(x=>x.collaboration_id===row.id),shipments:demo.shipments.filter(x=>x.collaboration_id===row.id),deliverables:demo.deliverables.filter(x=>x.collaboration_id===row.id)}}
 export async function creatorPage(options={}){
@@ -181,10 +187,11 @@ async function attachPrimaryFollowers(rows){
 function sortCreatorRows(rows,sort){const[field,direction]=sort.split('.'),factor=direction==='asc'?1:-1;return rows.sort((a,b)=>{const left=a[field],right=b[field];if((left==null||left==='')&&(right==null||right===''))return 0;if(left==null||left==='')return 1;if(right==null||right==='')return-1;const compared=typeof left==='number'&&typeof right==='number'?left-right:String(left).localeCompare(String(right),undefined,{numeric:true,sensitivity:'base'});return compared*factor})}
 function hydrateCreator(row){const creator_accounts=demo.creator_accounts.filter(x=>x.creator_id===row.id),outreach_records=demo.outreach_records.filter(x=>x.creator_id===row.id).slice(0,1),collaborations=demo.collaborations.filter(x=>x.creator_id===row.id),account=creator_accounts.find(x=>x.is_primary)||creator_accounts[0],outreach=outreach_records[0];return{...row,creator_accounts,outreach_records,collaborations,primary_followers:account?.followers??null,primary_handle:account?.handle||null,primary_platform:account?.platform||null,primary_profile_url:account?.profile_url||null,outreach_status:outreach?.status||'Not Contacted',last_contact_at:outreach?.last_contact_at||null,next_follow_up_at:outreach?.next_follow_up_at||null,collaboration_count:collaborations.length}}
 export async function referenceData(){
-  if(demoMode)return{owners:demo.owners,campaigns:demo.campaigns,products:demo.products};
+  if(demoMode)return{owners:demo.owners,campaigns:demo.campaigns,products:demo.products.filter(isSingleProduct)};
   const[owners,campaigns,products]=await Promise.all([list('crm_users',{pageSize:100,sort:'display_name.asc'}),list('campaigns',{pageSize:100,sort:'name.asc'}),list('products',{pageSize:500,sort:'name.asc'})]);
-  return{owners:owners.data.filter(x=>!x.archived_at).map(x=>({...x,name:x.display_name||x.email||'Team member'})),campaigns:campaigns.data,products:products.data};
+  return{owners:owners.data.filter(x=>!x.archived_at).map(x=>({...x,name:x.display_name||x.email||'Team member'})),campaigns:campaigns.data,products:products.data.filter(isSingleProduct)};
 }
+function isSingleProduct(product){return product.category!=='Set'&&!/-SET$/i.test(product.sku||'')}
 export async function creatorChoices(search=''){
   if(demoMode)return demo.creators.filter(row=>!search||JSON.stringify(row).toLowerCase().includes(search.toLowerCase())).slice(0,1000);
   return creatorPage({pageSize:1000,search,sort:'display_name.asc'}).then(result=>result.data);
@@ -325,19 +332,28 @@ export async function syncCollaborationStageForRecord(table,record={}){
   return{record:await save('collaborations',{id:collaborationId,stage:targetStage}),changed:true,targetStage};
 }
 export async function syncCollaborationProducts(collaborationId,productIds,ownerId=null){
-  const selected=[...new Set((productIds||[]).filter(Boolean))];
+  const quantities=new Map();
+  for(const item of productIds||[]){
+    const id=typeof item==='string'?item:item?.product_id;if(!id)continue;
+    const quantity=typeof item==='string'?null:Number(item.quantity);
+    if(quantity!==null&&(!Number.isSafeInteger(quantity)||quantity<1||quantity>2147483647))throw new Error('Quantity must be a whole number of at least 1.');
+    if(quantities.has(id))throw new Error('Select each SKU only once and use its quantity.');
+    quantities.set(id,quantity);
+  }
+  const selected=[...quantities.keys()];
   let rows;
   if(demoMode)rows=(demo.collaboration_products||[]).filter(row=>row.collaboration_id===collaborationId);
   else{const result=await request(`collaboration_products?collaboration_id=eq.${encodeURIComponent(collaborationId)}&select=*`);rows=result.data||[]}
   const byProduct=new Map(rows.map(row=>[row.product_id,row]));
   for(const row of rows){
     const active=selected.includes(row.product_id);
-    if(active&&row.archived_at)await save('collaboration_products',{id:row.id,archived_at:null,quantity:row.quantity||1,owner_id:row.owner_id||ownerId});
+    const quantity=quantities.get(row.product_id)??row.quantity??1;
+    if(active&&(row.archived_at||quantity!==row.quantity))await save('collaboration_products',{id:row.id,archived_at:null,quantity,owner_id:row.owner_id||ownerId});
     if(!active&&!row.archived_at)await archive('collaboration_products',row.id);
   }
   for(const productId of selected){
     if(byProduct.has(productId))continue;
-    const payload={collaboration_id:collaborationId,product_id:productId,quantity:1,is_primary:false,owner_id:ownerId};
+    const payload={collaboration_id:collaborationId,product_id:productId,quantity:quantities.get(productId)??1,is_primary:false,owner_id:ownerId};
     if(demoMode)payload.product=demo.products.find(product=>product.id===productId)||null;
     await save('collaboration_products',payload);
   }
