@@ -45,7 +45,8 @@ const toggle=new Function('$',`${toggleSource};return setProductChecked`)(()=>qt
 toggle(checkbox);assert.equal(Number(qty.value),1);assert.equal(qty.disabled,false);
 qty.value=3;checkbox.checked=false;toggle(checkbox);assert.equal(Number(qty.value),0);assert.equal(qty.disabled,true);
 checkbox.checked=true;toggle(checkbox);assert.equal(Number(qty.value),1);
-assert.ok(app.includes('x.product.name} ×${x.quantity??1}'),'collaboration rows display actual quantities');
+assert.ok(app.includes('renderProductLines(row.collaboration_products'),'collaboration rows use the shared product renderer');
+assert.ok((await import('../src/shipping-handoff.js')).renderProductLines([{product:{name:'Test product'},quantity:3}]).includes('×3'),'collaboration rows display actual quantities');
 const conversion=readFileSync(new URL('../supabase/operations/20261019_expand_shipping_sets.sql',import.meta.url),'utf8');
 assert.ok(!/\b(DELETE\s+FROM|TRUNCATE|DROP\s+TABLE|GRANT|CREATE\s+POLICY)\b/i.test(conversion));
 assert.ok(conversion.includes('snapshot IS DISTINCT FROM current_rows'));

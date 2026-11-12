@@ -203,7 +203,7 @@ assert.ok(appSource.includes("openCollaboration(tr.dataset.id,'overview',true)")
 assert.ok(appSource.includes('class="cell-action products-quick-edit'), 'collaboration rows must expose a direct product selection action');
 assert.ok(appSource.includes("openCollaboration(tr.dataset.id,'products')"), 'product action must open product selection directly');
 assert.ok(appSource.includes('Edit stage & details'), 'collaboration footer must explain where stage is changed');
-assert.ok(appSource.includes('No products selected'), 'empty product state must explain that no product was saved');
+assert.equal((await import('../src/shipping-handoff.js')).renderProductLines([]),'No products selected','empty product state must explain that no product was saved');
 assert.ok(appSource.includes('refreshCollaborationAfterMutation(c.id,tab)'), 'related saves must refresh the drawer, collaboration list and dashboard together');
 assert.ok(appSource.includes('refreshCreatorAfterMutation(creatorId)'), 'outreach saves must refresh the creator list and dashboard together');
 assert.ok(appSource.includes("payload.status='Published'"), 'a filled publication URL must automatically use Published status');

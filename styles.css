@@ -93,3 +93,12 @@
 .handoff-table{min-width:1200px}.handoff-table td{vertical-align:top}.handoff-table small{display:block;color:var(--muted);font-size:12px;line-height:1.5;margin-top:5px}.handoff-products{min-width:170px;line-height:1.7}.handoff-latest{min-width:180px;max-width:260px;font-size:12px;line-height:1.6}
 .handoff-change{display:block;border:0;background:transparent;color:var(--blue);font-size:12px;font-weight:700;padding:5px 0;cursor:pointer}.handoff-table summary{color:var(--blue);cursor:pointer;white-space:nowrap}
 .handoff-rules{margin:16px;padding:12px;background:#eef8fe;border-radius:7px;font-size:12px;line-height:1.8}.handoff-rules summary{cursor:pointer;font-weight:700}#handoffFields{display:grid;gap:14px}#handoffStatusFields{display:grid;gap:14px}.handoff-check{display:flex;align-items:start;gap:8px;font-weight:400!important}.handoff-check input{width:auto!important;margin-top:4px}#handoffDialog .dialog-form{max-height:90vh;overflow:auto}
+
+/* Keep product names readable and quantities aligned in both collaboration views. */
+#collaborationRows .collaboration-products{min-width:280px;width:300px}
+#collaborationRows .products-quick-edit{min-width:260px}
+.product-lines{display:grid;gap:7px;min-width:240px;width:100%}
+.product-line{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:start;column-gap:14px;line-height:1.45}
+.product-line-name{white-space:normal;word-break:normal;overflow-wrap:normal}
+.product-line-quantity{white-space:nowrap;font-weight:650;font-variant-numeric:tabular-nums}
+.handoff-table .handoff-products{min-width:280px;width:300px}

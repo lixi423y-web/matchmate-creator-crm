@@ -1,6 +1,6 @@
 import{demoDatabase}from'./demo.js?v=20260825-shared-auth1';
 import{instagramHandle,accountKey,creatorSearch,validateInstagramAccount}from'./identity.js';
-import{handoffSnapshot,requirePackingDetails,shippingStatusPatch}from'./shipping-handoff.js?v=20261112-handoff1';
+import{handoffSnapshot,requirePackingDetails,shippingStatusPatch}from'./shipping-handoff.js?v=20261112-simple3';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const publishableKey=cfg.supabasePublishableKey||cfg.supabaseAnonKey||'';
@@ -207,8 +207,8 @@ export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,
     let patch;
     if(mode==='shipping-owner'){
       if(values.owner_id===s.owner_id)return{unchanged:true};
-      if(!values.owner_id||!values.confirmed||!String(values.reason||'').trim())throw Error('Choose an owner, add a reason and confirm acceptance.');
-      patch={owner_id:values.owner_id};summary='Shipping owner: '+values.owner_name;
+      if(!values.owner_id)throw Error('Choose a shipping owner.');
+      patch={owner_id:values.owner_id};summary='Shipping owner: '+(values.previous_owner_name||s.owner_id||'Unassigned')+' → '+values.owner_name;
     }else if(mode==='status'){
       patch=shippingStatusPatch(s,values.status,values);if(!patch)return{unchanged:true};
       if(values.status==='Shipped'){requirePackingDetails(products,s.address_snapshot,s.owner_id);summary='Shipped · '+(values.owner_name||'Assigned owner');}else summary='Marked delivered';
@@ -220,7 +220,7 @@ export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,
     saved=await saveIfUnchanged('shipments',s,patch);before=s;entityType='shipments';
   }
   let activityWarning=false,stageWarning=false;
-  try{await logActivity({entityType,entityId:saved.id,creatorId:c.creator_id,collaborationId:c.id,action:'Handoff: '+summary,before,after:saved,note:mode==='shipping-owner'?String(values.reason||'').trim():''});}catch{activityWarning=true;}
+  try{await logActivity({entityType,entityId:saved.id,creatorId:c.creator_id,collaborationId:c.id,action:'Handoff: '+summary,before,after:saved,note:''});}catch{activityWarning=true;}
   if(entityType==='shipments')try{await syncCollaborationStageForRecord('shipments',saved);}catch{stageWarning=true;}
   return{saved,activityWarning,stageWarning};
 }

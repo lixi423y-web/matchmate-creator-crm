@@ -20,8 +20,8 @@ const shippedRows=await api.shippingHandoffRows();assert.ok(shippedRows.some(r=>
 assert.equal((await api.getOne('collaborations',c.id)).stage,'Ready to Fulfill');
 context=await api.shippingHandoffContext(c.id,c.id);
 const unchanged=await api.saveShippingHandoff({collaborationId:c.id,shipmentId:c.id,mode:'shipping-owner',expected:handoffSnapshot(context),values:{owner_id:'owner-ivy'}});assert.equal(unchanged.unchanged,true);
-await assert.rejects(api.saveShippingHandoff({collaborationId:c.id,shipmentId:c.id,mode:'shipping-owner',expected:handoffSnapshot(context),values:{owner_id:'owner-team',reason:'',confirmed:true}}),/reason/);
-const transfer=await api.saveShippingHandoff({collaborationId:c.id,shipmentId:c.id,mode:'shipping-owner',expected:handoffSnapshot(context),values:{owner_id:'owner-team',owner_name:'Team',reason:'Accepted handoff',confirmed:true}});
+await assert.rejects(api.saveShippingHandoff({collaborationId:c.id,shipmentId:c.id,mode:'shipping-owner',expected:handoffSnapshot(context),values:{owner_id:''}}),/shipping owner/);
+const transfer=await api.saveShippingHandoff({collaborationId:c.id,shipmentId:c.id,mode:'shipping-owner',expected:handoffSnapshot(context),values:{owner_id:'owner-team',owner_name:'Team',previous_owner_name:'Ivy'}});
 assert.equal(transfer.saved.owner_id,'owner-team');
 await assert.rejects(api.saveShippingHandoff({collaborationId:c.id,shipmentId:c.id,mode:'status',expected:handoffSnapshot(context),values:{status:'Shipped'}}),/HANDOFF_CONFLICT/);
 context=await api.shippingHandoffContext(c.id,c.id);
@@ -43,3 +43,15 @@ const app=await readFile(new URL('../src/app.js',import.meta.url),'utf8'),html=a
 assert.ok(!app.slice(app.indexOf('function renderCreators'),app.indexOf('function renderCollaborations')).includes('handoff-row'));
 assert.ok(html.includes('<th>Collaboration</th><th>Creator</th>'));assert.ok(html.includes('<th>Latest update</th>'));
 console.log('Shipping handoff: submission, duplicate prevention, shared identity, owner transfer, stale-write rejection, status/stage sync, no regression and preservation passed.');
+
+const uiSource=await readFile(new URL('../src/shipping-handoff-ui.js',import.meta.url),'utf8');
+const transferBranch=uiSource.slice(uiSource.indexOf("else if(action==='shipping-owner')"),uiSource.indexOf("else if(action==='tracking')"));
+assert.doesNotMatch(transferBranch,/textarea|checkbox|Reason/);
+const {renderProductLines}=await import('../src/shipping-handoff.js');
+const rendered=renderProductLines([{product:{name:'Rosé Bloom Scrunchie'},quantity:1},{product:{name:'<unsafe>'},quantity:2}]);
+assert.equal((rendered.match(/class="product-line"/g)||[]).length,2);
+assert.ok(rendered.includes('product-line-quantity">×2'));
+assert.ok(rendered.includes('&lt;unsafe&gt;'));assert.ok(!rendered.includes('<unsafe>'));
+const transferLogs=await api.related('activity_logs','collaboration_id',c.id);
+assert.ok(transferLogs.some(l=>l.action==='Handoff: Shipping owner: Ivy → Team'));
+console.log('Simple owner save without reason/checkbox, automatic before/after history, aligned product lines and HTML escaping passed.');

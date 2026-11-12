@@ -8,7 +8,7 @@ Approved preview: person-handoff-demo, 2026-11-12.
 2. In Collaborations, select Submit for shipping. Review the copied address and assign one shipping owner.
 3. Shipping handoff lists submitted shipments only. Pending includes Ready and Exception; All preserves sent records. Old Drafts are not automatically submitted.
 4. The assigned owner checks products/address, hands the parcel to the carrier, then changes Status to Shipped and records dispatch time. Tracking may be added later.
-5. Owner changes require a reason and confirmation that the new owner accepted. With a shared login this is a team rule, not a per-person authentication restriction.
+5. To change the shipping owner, select a person and Save. No reason or acceptance checkbox is required. The previous and new owner are recorded automatically. With a shared login, assignment is a team convention, not per-person authentication.
 6. Latest update shows a short timestamped change. Full records remain under the collaboration's Activity tab. Times are explicitly UTC; dispatch entry uses the browser's local time.
 
 ## Implementation and limits

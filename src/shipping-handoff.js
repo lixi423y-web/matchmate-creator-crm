@@ -33,3 +33,10 @@ export function latestHandoffUpdate(shipment,logs=[]){
  return{at:shipment.updated_at||shipment.created_at,text:'Shipment: '+shippingLabel(shipment.status)};
 }
 export function handoffTime(value){if(!value)return'—';const d=new Date(value);return Number.isNaN(d.getTime())?'—':d.toISOString().slice(0,16).replace('T',' ')+' UTC';}
+
+// One product per line, with an unbroken quantity at the right.
+export function renderProductLines(rows=[],fallback=''){
+ const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const items=rows.filter(row=>row.product?.name).map(row=>'<span class="product-line"><span class="product-line-name">'+escape(row.product.name)+'</span><strong class="product-line-quantity">×'+escape(row.quantity??1)+'</strong></span>');
+ return items.length?'<span class="product-lines">'+items.join('')+'</span>':escape(fallback||'No products selected');
+}
