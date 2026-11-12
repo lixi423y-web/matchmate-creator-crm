@@ -1,5 +1,6 @@
 import{demoDatabase}from'./demo.js?v=20260825-shared-auth1';
 import{instagramHandle,accountKey,creatorSearch,validateInstagramAccount}from'./identity.js';
+import{handoffSnapshot,requirePackingDetails,shippingStatusPatch}from'./shipping-handoff.js?v=20261112-handoff1';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const publishableKey=cfg.supabasePublishableKey||cfg.supabaseAnonKey||'';
@@ -145,6 +146,84 @@ export async function save(table,record){
   const{data}=await request(`${table}?select=*`,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return data?.[0];
 }
 export async function archive(table,id){return save(table,{id,archived_at:new Date().toISOString()})}
+// Compare-and-swap prevents a stale handoff editor from overwriting a teammate.
+export async function saveIfUnchanged(table,before,patch){
+  if(demoMode){const latest=await getOne(table,before.id);if(!latest||latest.updated_at!==before.updated_at)throw Error('HANDOFF_CONFLICT');return save(table,{id:before.id,...patch});}
+  const q=new URLSearchParams({id:'eq.'+before.id,updated_at:before.updated_at?'eq.'+before.updated_at:'is.null',select:'*'});
+  const payload=normalizeWritePayload({id:before.id,...patch},table);delete payload.id;
+  const result=await request(table+'?'+q,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
+  if(result.data?.length!==1)throw Error('HANDOFF_CONFLICT');return result.data[0];
+}
+async function allActiveRows(table){
+  const rows=[];for(let page=1;;page++){const result=await list(table,{page,pageSize:100,sort:'created_at.asc,id.asc'});rows.push(...result.data);if(result.data.length<100)return rows;}
+}
+export async function shippingHandoffRows(){
+  const shipments=(await allActiveRows('shipments')).filter(s=>!s.archived_at&&s.status!=='Draft');
+  if(!shipments.length)return[];
+  const ids=[...new Set(shipments.map(s=>s.collaboration_id))],collaborations=[],products=[],logs=[];
+  for(let start=0;start<ids.length;start+=75){
+    const chunk=ids.slice(start,start+75);
+    if(demoMode){for(const id of chunk){const row=await getOne('collaborations',id);if(row&&!row.archived_at)collaborations.push(hydrateCollaboration(row));products.push(...await related('collaboration_products','collaboration_id',id));logs.push(...await related('activity_logs','collaboration_id',id));}}
+    else{
+      const predicate='collaboration_id=in.('+chunk.join(',')+')&archived_at=is.null';
+      const c=await request('collaboration_directory?id=in.('+chunk.join(',')+')&archived_at=is.null&select=*&limit=1000');collaborations.push(...c.data);
+      for(const [table,target,select]of [['collaboration_products',products,'*,product:products(id,sku,name,category)'],['activity_logs',logs,'id,collaboration_id,entity_id,entity_type,action,before_data,after_data,created_at']]){
+        for(let offset=0;;offset+=500){const r=await request(table+'?'+predicate+'&select='+encodeURIComponent(select)+'&order=created_at.desc,id.desc&limit=500&offset='+offset);target.push(...r.data);if(r.data.length<500)break;}
+      }
+    }
+  }
+  const byId=new Map(collaborations.filter(c=>c.stage!=='Closed').map(c=>[c.id,c]));
+  return shipments.filter(s=>byId.has(s.collaboration_id)).map(shipment=>({shipment,collaboration:byId.get(shipment.collaboration_id),products:products.filter(p=>p.collaboration_id===shipment.collaboration_id).map(p=>({...p,product:p.product||(demoMode?demo.products.find(x=>x.id===p.product_id):null)})),logs:logs.filter(l=>l.collaboration_id===shipment.collaboration_id)}));
+}
+export async function shippingHandoffContext(collaborationId,shipmentId=null){
+  const [collaboration,shipments,products]=await Promise.all([getOne('collaborations',collaborationId),related('shipments','collaboration_id',collaborationId),related('collaboration_products','collaboration_id',collaborationId,'*,product:products(id,sku,name,category)')]);
+  if(!collaboration||collaboration.archived_at||collaboration.stage==='Closed')throw Error('This collaboration is closed or unavailable.');
+  const creator=await getOne('creators',collaboration.creator_id);
+  const shipment=shipmentId?shipments.find(s=>s.id===shipmentId):shipments[0]||null;
+  if(shipmentId&&!shipment)throw Error('HANDOFF_CONFLICT');
+  return{collaboration:{...collaboration,creator_name:creator?.display_name||creator?.nickname||'Creator'},shipment,products};
+}
+export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,values={},expected}){
+  const context=await shippingHandoffContext(collaborationId,shipmentId),{collaboration:c,shipment:s,products}=context;
+  if(handoffSnapshot(context)!==expected)throw Error('HANDOFF_CONFLICT');
+  let saved,before,entityType,summary;
+  if(mode==='outreach-owner'){
+    if((values.owner_id||null)===(c.owner_id||null))return{unchanged:true};
+    saved=await saveIfUnchanged('collaborations',c,{owner_id:values.owner_id||null});before=c;entityType='collaboration';summary='Outreach owner: '+(values.owner_name||'Unassigned');
+  }else if(mode==='submit'){
+    if(s&&s.status!=='Draft')throw Error('This collaboration already has a submitted shipment.');
+    requirePackingDetails(products,values.address_snapshot,values.owner_id);
+    const patch={collaboration_id:c.id,status:'Ready',owner_id:values.owner_id,address_id:values.address_id||null,address_snapshot:values.address_snapshot};
+    if(s)saved=await saveIfUnchanged('shipments',s,patch);
+    else{
+      // One stable first-handoff ID: concurrent submissions cannot create two parcels.
+      const payload=normalizeWritePayload({...patch,id:c.id},'shipments');
+      if(demoMode){if(await getOne('shipments',c.id))throw Error('HANDOFF_CONFLICT');saved=await save('shipments',payload);}
+      else{const r=await request('shipments?select=*',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});saved=r.data?.[0];}
+    }
+    before=s;entityType='shipments';summary='Submitted for shipping · '+values.owner_name;
+  }else{
+    if(!s)throw Error('Submit this collaboration for shipping first.');
+    let patch;
+    if(mode==='shipping-owner'){
+      if(values.owner_id===s.owner_id)return{unchanged:true};
+      if(!values.owner_id||!values.confirmed||!String(values.reason||'').trim())throw Error('Choose an owner, add a reason and confirm acceptance.');
+      patch={owner_id:values.owner_id};summary='Shipping owner: '+values.owner_name;
+    }else if(mode==='status'){
+      patch=shippingStatusPatch(s,values.status,values);if(!patch)return{unchanged:true};
+      if(values.status==='Shipped'){requirePackingDetails(products,s.address_snapshot,s.owner_id);summary='Shipped · '+(values.owner_name||'Assigned owner');}else summary='Marked delivered';
+    }else if(mode==='tracking'){
+      if(!String(values.tracking_number||'').trim())throw Error('Enter a tracking number.');
+      patch={carrier:values.carrier||null,tracking_number:values.tracking_number.trim()};summary='Tracking updated';
+      if(patch.carrier===s.carrier&&patch.tracking_number===s.tracking_number)return{unchanged:true};
+    }else throw Error('Unknown handoff action.');
+    saved=await saveIfUnchanged('shipments',s,patch);before=s;entityType='shipments';
+  }
+  let activityWarning=false,stageWarning=false;
+  try{await logActivity({entityType,entityId:saved.id,creatorId:c.creator_id,collaborationId:c.id,action:'Handoff: '+summary,before,after:saved,note:mode==='shipping-owner'?String(values.reason||'').trim():''});}catch{activityWarning=true;}
+  if(entityType==='shipments')try{await syncCollaborationStageForRecord('shipments',saved);}catch{stageWarning=true;}
+  return{saved,activityWarning,stageWarning};
+}
 export async function remove(table,id){
   if(demoMode){const rows=demo[table]||[],index=rows.findIndex(row=>row.id===id);if(index>=0)rows.splice(index,1);return}
   await request(`${table}?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',headers:{Prefer:'return=minimal'}});
@@ -160,7 +239,9 @@ export async function collaborationPage(options={}){
   if(result.data?.length){
     const items=[];
     for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`collaboration_products?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=collaboration_id,product_id,quantity,product:products(id,sku,name,category)&limit=1000`);items.push(...(page.data||[]))}
-    result.data=result.data.map(row=>({...row,collaboration_products:items.filter(item=>item.collaboration_id===row.id)}));
+    const shipments=[];
+    for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`shipments?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=id,collaboration_id,status&limit=1000`);shipments.push(...(page.data||[]));}
+    result.data=result.data.map(row=>({...row,collaboration_products:items.filter(item=>item.collaboration_id===row.id),shipments:shipments.filter(item=>item.collaboration_id===row.id)}));
   }
   return result;
 }
@@ -329,7 +410,7 @@ export async function syncCollaborationStageForRecord(table,record={}){
   if(!current||['Closed','Completed'].includes(current.stage))return{record:current,changed:false,targetStage};
   const currentRank=WORKFLOW_STAGE_ORDER.indexOf(current.stage),targetRank=WORKFLOW_STAGE_ORDER.indexOf(targetStage);
   if(currentRank>=targetRank)return{record:current,changed:false,targetStage};
-  return{record:await save('collaborations',{id:collaborationId,stage:targetStage}),changed:true,targetStage};
+  return{record:await saveIfUnchanged('collaborations',current,{stage:targetStage}),changed:true,targetStage};
 }
 export async function syncCollaborationProducts(collaborationId,productIds,ownerId=null){
   const quantities=new Map();
