@@ -1,7 +1,7 @@
 // Shared presentation and validation for collaboration-backed shipping handoffs.
 import {shippingAddressText} from './shipping-address.js';
 export const HANDOFF_QUEUES=['Pending','Shipped','Tracking needed','All'];
-export const shippingLabel=status=>({Draft:'Needs details',Ready:'Ready to ship'}[status]||status);
+export const shippingLabel=status=>({Draft:'Not submitted',Ready:'To ship'}[status]||status);
 export const productSignature=rows=>JSON.stringify(rows.filter(r=>!r.archived_at).map(r=>[r.product_id,Number(r.quantity)]).sort((a,b)=>a[0].localeCompare(b[0])));
 export function handoffSnapshot(context){return JSON.stringify([context.collaboration.updated_at,context.collaboration.owner_id,context.collaboration.stage,context.shipment?.id,context.shipment?.updated_at,context.shipment?.status,context.shipment?.owner_id,context.shipment?.address_snapshot,productSignature(context.products)]);}
 export function inHandoffQueue(shipment,queue){if(shipment.status==='Draft')return false;return queue==='All'||(queue==='Pending'?['Ready','Exception'].includes(shipment.status):queue==='Tracking needed'?['Shipped','Delivered'].includes(shipment.status)&&!shipment.tracking_number:['Shipped','Delivered'].includes(shipment.status));}
@@ -39,4 +39,14 @@ export function renderProductLines(rows=[],fallback=''){
  const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const items=rows.filter(row=>row.product?.name).map(row=>'<span class="product-line"><span class="product-line-name">'+escape(row.product.name)+'</span><strong class="product-line-quantity">×'+escape(row.quantity??1)+'</strong></span>');
  return items.length?'<span class="product-lines">'+items.join('')+'</span>':escape(fallback||'No products selected');
+}
+
+export const latestShipment=rows=>[...(rows||[])].filter(s=>!s.archived_at).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))||String(b.id).localeCompare(String(a.id)))[0]||null;
+
+export function renderRecipientDetails(snapshot){
+ const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const full=shippingAddressText(snapshot);
+ if(!full.trim())return'<span class="muted">Recipient details needed</span>';
+ const preview=full.split('\n').filter(Boolean).slice(-2).join(' · ');
+ return'<div class="recipient-preview"><strong>'+escape(snapshot?.recipient_name||'Saved address')+'</strong><small>'+escape(preview)+'</small></div><details><summary>Show details</summary><pre class="shipping-address-text">'+escape(full)+'</pre></details>';
 }

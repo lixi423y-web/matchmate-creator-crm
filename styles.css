@@ -102,3 +102,16 @@
 .product-line-name{white-space:normal;word-break:normal;overflow-wrap:normal}
 .product-line-quantity{white-space:nowrap;font-weight:650;font-variant-numeric:tabular-nums}
 .handoff-table .handoff-products{min-width:280px;width:300px}
+
+/* Creator-first handoff: share the reviewed desktop demo's information hierarchy. */
+.handoff-heading{margin:18px 16px 6px;font-size:18px}
+.handoff-column-head,.handoff-card{display:grid;grid-template-columns:minmax(145px,1.05fr) minmax(200px,1.45fr) minmax(190px,1.4fr) minmax(135px,1fr) minmax(145px,1fr);gap:20px;padding:18px}
+.handoff-column-head{background:#f6f9fc;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-size:10px;font-weight:700;padding-top:13px;padding-bottom:13px}
+.handoff-card{border-top:1px solid var(--line);align-items:start}.handoff-card small{display:block;color:var(--muted);font-size:11px;line-height:1.6}
+.handoff-creator>strong{font-size:17px;display:block;line-height:1.4}.handoff-code{font-size:10px!important;margin-top:7px}.handoff-cards .handoff-products{min-width:0}.handoff-cards .product-lines{min-width:0}.handoff-cards .product-line-name{overflow-wrap:normal;word-break:normal}.handoff-card summary,.collaboration-recipient summary{color:var(--blue);cursor:pointer;font-size:12px;margin-top:7px}
+.handoff-card .shipping-address-text,.collaboration-recipient .shipping-address-text{margin-top:8px;font-size:12px;overflow-wrap:anywhere}
+.recipient-preview>strong{font-size:13px}.recipient-preview small{display:block;color:var(--muted);font-size:11px;line-height:1.5}.handoff-people>small{font-size:10px;text-transform:uppercase;letter-spacing:.03em}.handoff-person-gap{margin-top:12px}
+.handoff-dispatch{display:block;margin:12px 0;width:100%;font-size:12px}.handoff-update{font-size:10px;color:var(--muted);line-height:1.6;margin-top:11px}.handoff-mobile-label{display:none}
+#collaborationRecords table{min-width:1350px}#collaborationRows .collaboration-recipient{min-width:210px;max-width:300px}#collaborationRows .collaboration-person{min-width:110px}#collaborationRows .collaboration-handoff{min-width:170px}#collaborationRows .collaboration-handoff>.handoff-row{margin-top:9px}#collaborationRows .collaboration-publication{min-width:125px}.handoff-review{background:#f6f9fc;padding:13px;border:1px solid var(--line);border-radius:6px}
+@media(max-width:1250px){.handoff-column-head{display:none}.handoff-card{grid-template-columns:1fr 1fr;gap:18px}.handoff-creator{grid-column:1/-1;border-bottom:1px solid var(--line);padding-bottom:12px}.handoff-mobile-label{display:block;text-transform:uppercase;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:8px}.handoff-people,.handoff-actions{border-top:1px solid var(--line);padding-top:13px}}
+@media(max-width:560px){.handoff-card{grid-template-columns:1fr}.handoff-creator{grid-column:auto}}

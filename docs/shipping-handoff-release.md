@@ -1,5 +1,15 @@
 # Collaboration-backed shipping handoff
 
+## 2026-11-13 creator-first release
+
+- Collaborations now lists Creator, Stage, Products & quantity, Recipient details, Outreach owner, Shipping owner, Shipping handoff and Publication. Campaign/dates/deliverables remain available in filters and details; existing CSV exports retain their scalar fields.
+- Setting a shipping owner creates or updates only a Draft shipment. Saving recipient details also leaves the handoff unsubmitted. Both pages edit the same owner and product records.
+- Hand over for shipping reviews existing products and address, then chooses the sender. No repeated address entry, identity selector, warehouse selector or acceptance form.
+- To ship lists submitted Ready/Exception parcels, filtered by shipping owner. Mark shipped records dispatch and advances Stage without regressing content/publication stages.
+- Recipient details can be edited directly from the list; updates retain the previous snapshot in activity history.
+- No production migration or automatic historical assignment/submission. Baseline: creators 330, collaborations 41, shipments 42, addresses 14, activity logs 341.
+- For this release, roll back frontend files to commit 40c5aa675055865b544224f6984e8e1b54522ad4 with a forward commit. Database rollback is unnecessary.
+
 Approved preview: person-handoff-demo, 2026-11-12.
 
 ## Operation

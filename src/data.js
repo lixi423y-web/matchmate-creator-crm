@@ -1,6 +1,6 @@
 import{demoDatabase}from'./demo.js?v=20260825-shared-auth1';
 import{instagramHandle,accountKey,creatorSearch,validateInstagramAccount}from'./identity.js';
-import{handoffSnapshot,requirePackingDetails,shippingStatusPatch}from'./shipping-handoff.js?v=20261112-simple3';
+import{handoffSnapshot,requirePackingDetails,shippingStatusPatch}from'./shipping-handoff.js?v=20261113-handoff4';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const publishableKey=cfg.supabasePublishableKey||cfg.supabaseAnonKey||'';
@@ -187,6 +187,7 @@ export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,
   const context=await shippingHandoffContext(collaborationId,shipmentId),{collaboration:c,shipment:s,products}=context;
   if(handoffSnapshot(context)!==expected)throw Error('HANDOFF_CONFLICT');
   let saved,before,entityType,summary;
+  const insertFirst=async patch=>{const payload=normalizeWritePayload({...patch,id:c.id},'shipments');if(demoMode){if(await getOne('shipments',c.id))throw Error('HANDOFF_CONFLICT');return save('shipments',payload);}const r=await request('shipments?select=*',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return r.data?.[0];};
   if(mode==='outreach-owner'){
     if((values.owner_id||null)===(c.owner_id||null))return{unchanged:true};
     saved=await saveIfUnchanged('collaborations',c,{owner_id:values.owner_id||null});before=c;entityType='collaboration';summary='Outreach owner: '+(values.owner_name||'Unassigned');
@@ -195,13 +196,17 @@ export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,
     requirePackingDetails(products,values.address_snapshot,values.owner_id);
     const patch={collaboration_id:c.id,status:'Ready',owner_id:values.owner_id,address_id:values.address_id||null,address_snapshot:values.address_snapshot};
     if(s)saved=await saveIfUnchanged('shipments',s,patch);
-    else{
-      // One stable first-handoff ID: concurrent submissions cannot create two parcels.
-      const payload=normalizeWritePayload({...patch,id:c.id},'shipments');
-      if(demoMode){if(await getOne('shipments',c.id))throw Error('HANDOFF_CONFLICT');saved=await save('shipments',payload);}
-      else{const r=await request('shipments?select=*',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});saved=r.data?.[0];}
-    }
+    else saved=await insertFirst(patch);
     before=s;entityType='shipments';summary='Submitted for shipping · '+values.owner_name;
+  }else if(mode==='address'){
+    if(!String(values.address_snapshot?.recipient_name||'').trim()||!String(values.address_snapshot?.full_address||'').trim())throw Error('Enter the recipient name and full shipping address.');
+    const patch={address_snapshot:values.address_snapshot,address_id:null};
+    saved=s?await saveIfUnchanged('shipments',s,patch):await insertFirst({...patch,collaboration_id:c.id,status:'Draft',owner_id:null});
+    before=s;entityType='shipments';summary='Recipient details updated';
+  }else if(mode==='shipping-owner'&&!s){
+    if(!values.owner_id)throw Error('Choose a shipping owner.');
+    saved=await insertFirst({collaboration_id:c.id,status:'Draft',owner_id:values.owner_id,address_snapshot:{}});
+    before=null;entityType='shipments';summary='Shipping owner: Unassigned → '+values.owner_name;
   }else{
     if(!s)throw Error('Submit this collaboration for shipping first.');
     let patch;
@@ -240,12 +245,21 @@ export async function collaborationPage(options={}){
     const items=[];
     for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`collaboration_products?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=collaboration_id,product_id,quantity,product:products(id,sku,name,category)&limit=1000`);items.push(...(page.data||[]))}
     const shipments=[];
-    for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`shipments?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=id,collaboration_id,status&limit=1000`);shipments.push(...(page.data||[]));}
-    result.data=result.data.map(row=>({...row,collaboration_products:items.filter(item=>item.collaboration_id===row.id),shipments:shipments.filter(item=>item.collaboration_id===row.id)}));
+    for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`shipments?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=id,collaboration_id,status,owner_id,address_snapshot,created_at,updated_at&limit=1000`);shipments.push(...(page.data||[]));}
+    const addresses=[],publications=[];
+    for(let start=0;start<result.data.length;start+=75){
+      const chunk=result.data.slice(start,start+75),ids=chunk.map(r=>r.id),creatorIds=[...new Set(chunk.map(r=>r.creator_id))];
+      for(const [table,target,filter,select]of [
+        ['creator_addresses',addresses,'creator_id=in.('+creatorIds.join(',')+')','id,creator_id,is_default,full_address,recipient_name,phone,country,created_at'],
+        ['publications',publications,'collaboration_id=in.('+ids.join(',')+')','id,collaboration_id,url,status,published_at,created_at']]){
+        for(let offset=0;;offset+=500){const r=await request(table+'?'+filter+'&archived_at=is.null&select='+select+'&order=created_at.desc,id.desc&limit=500&offset='+offset);target.push(...r.data);if(r.data.length<500)break;}
+      }
+    }
+    result.data=result.data.map(row=>{const available=addresses.filter(a=>a.creator_id===row.creator_id),address=available.find(a=>a.is_default)||available[0];return{...row,collaboration_products:items.filter(item=>item.collaboration_id===row.id),shipments:shipments.filter(item=>item.collaboration_id===row.id),creator_shipping_address:creatorAddressSnapshot(address||{}),publications:publications.filter(item=>item.collaboration_id===row.id)};});
   }
   return result;
 }
-function hydrateCollaboration(row){const creator=demo.creators.find(c=>c.id===row.creator_id),creator_account=demo.creator_accounts.find(x=>x.creator_id===row.creator_id&&x.is_primary)||demo.creator_accounts.find(x=>x.creator_id===row.creator_id);return{...row,creator,creator_account,creator_name:creator?.display_name,creator_handle:creator_account?.handle,creator_profile_url:creator_account?.profile_url,campaign:demo.campaigns.find(c=>c.id===row.campaign_id),collaboration_products:demo.collaboration_products.filter(x=>x.collaboration_id===row.id),shipments:demo.shipments.filter(x=>x.collaboration_id===row.id),deliverables:demo.deliverables.filter(x=>x.collaboration_id===row.id)}}
+function hydrateCollaboration(row){const creator=demo.creators.find(c=>c.id===row.creator_id),creator_account=demo.creator_accounts.find(x=>x.creator_id===row.creator_id&&x.is_primary)||demo.creator_accounts.find(x=>x.creator_id===row.creator_id);return{...row,creator_shipping_address:creatorAddressSnapshot(demo.creator_addresses.find(a=>a.creator_id===row.creator_id&&a.is_default)||demo.creator_addresses.find(a=>a.creator_id===row.creator_id)||{}),publications:demo.publications.filter(p=>p.collaboration_id===row.id&&!p.archived_at),creator,creator_account,creator_name:creator?.display_name,creator_handle:creator_account?.handle,creator_profile_url:creator_account?.profile_url,campaign:demo.campaigns.find(c=>c.id===row.campaign_id),collaboration_products:demo.collaboration_products.filter(x=>x.collaboration_id===row.id),shipments:demo.shipments.filter(x=>x.collaboration_id===row.id),deliverables:demo.deliverables.filter(x=>x.collaboration_id===row.id)}}
 export async function creatorPage(options={}){
   options={...options,search:creatorSearch(options.search)};
   if(demoMode){let rows=demo.creators.map(row=>hydrateCreator(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}const{created_from,created_to,owner_id,...exactFilters}=filters;Object.entries(exactFilters).filter(([,value])=>value!==''&&value!=null).forEach(([key,value])=>rows=rows.filter(row=>String(row[key]??'')===String(value)));if(owner_id==='__unassigned__')rows=rows.filter(row=>row.owner_id==null);else if(owner_id)rows=rows.filter(row=>String(row.owner_id??'')===String(owner_id));if(created_from)rows=rows.filter(row=>new Date(row.created_at)>=new Date(`${created_from}T00:00:00Z`));if(created_to){const end=new Date(`${created_to}T00:00:00Z`);end.setUTCDate(end.getUTCDate()+1);rows=rows.filter(row=>new Date(row.created_at)<end)}rows=sortCreatorRows(rows,sort);return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
@@ -503,7 +517,7 @@ function summarizeDashboard({totalCreators,outreach=[],collaborations=[],shipmen
 }
 function stamp(row){return new Date(row.updated_at||row.last_contact_at||row.created_at||0).valueOf()||0}
 function rate(numerator,denominator){return{numerator,denominator,percent:denominator?Math.round(numerator/denominator*100):0}}
-export function exportRows(filename,rows){if(!rows.length)return;const keys=[...new Set(rows.flatMap(Object.keys))].filter(key=>!['creator_accounts','outreach_records','collaborations','creator','campaign','collaboration_products','shipments','deliverables'].includes(key));const csv=[keys.join(','),...rows.map(row=>keys.map(key=>`"${String(Array.isArray(row[key])?row[key].join('|'):row[key]??'').replaceAll('"','""')}"`).join(','))].join('\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)}
+export function exportRows(filename,rows){if(!rows.length)return;const keys=[...new Set(rows.flatMap(Object.keys))].filter(key=>!['creator_accounts','outreach_records','collaborations','creator','campaign','collaboration_products','shipments','deliverables','publications','creator_shipping_address'].includes(key));const csv=[keys.join(','),...rows.map(row=>keys.map(key=>`"${String(Array.isArray(row[key])?row[key].join('|'):row[key]??'').replaceAll('"','""')}"`).join(','))].join('\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)}
 export async function exportCreatorResults(options){return exportPaged('matchmate-creators.csv',creatorPage,options)}
 export async function exportCollaborationResults(options){return exportPaged('matchmate-collaborations.csv',collaborationPage,options)}
 async function exportPaged(filename,loader,options){const pageSize=500,rows=[];for(let page=1;page<=20;page++){const result=await loader({...options,page,pageSize});rows.push(...result.data);if(rows.length>=result.count||result.data.length<pageSize)break}exportRows(filename,rows);return rows.length}

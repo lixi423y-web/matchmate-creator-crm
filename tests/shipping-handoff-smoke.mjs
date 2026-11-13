@@ -41,7 +41,7 @@ assert.equal(productSignature([{product_id:'b',quantity:2},{product_id:'a',quant
 assert.equal(latestHandoffUpdate({status:'Ready',updated_at:'2026-11-12'},[{action:'Handoff: Products updated',created_at:'2026-11-13'}]).text,'Products updated');
 const app=await readFile(new URL('../src/app.js',import.meta.url),'utf8'),html=await readFile(new URL('../index.html',import.meta.url),'utf8');
 assert.ok(!app.slice(app.indexOf('function renderCreators'),app.indexOf('function renderCollaborations')).includes('handoff-row'));
-assert.ok(html.includes('<th>Collaboration</th><th>Creator</th>'));assert.ok(html.includes('<th>Latest update</th>'));
+assert.ok(html.includes('<th>Outreach owner</th><th>Shipping owner</th>'));assert.ok(html.includes('<span>Send to</span>'));
 console.log('Shipping handoff: submission, duplicate prevention, shared identity, owner transfer, stale-write rejection, status/stage sync, no regression and preservation passed.');
 
 const uiSource=await readFile(new URL('../src/shipping-handoff-ui.js',import.meta.url),'utf8');
@@ -55,3 +55,25 @@ assert.ok(rendered.includes('&lt;unsafe&gt;'));assert.ok(!rendered.includes('<un
 const transferLogs=await api.related('activity_logs','collaboration_id',c.id);
 assert.ok(transferLogs.some(l=>l.action==='Handoff: Shipping owner: Ivy → Team'));
 console.log('Simple owner save without reason/checkbox, automatic before/after history, aligned product lines and HTML escaping passed.');
+const candidate=collaborations.find(row=>row.id!==c.id&&!row.shipments?.length);
+const contextBefore=await api.shippingHandoffContext(candidate.id);
+const stageBefore=contextBefore.collaboration.stage;
+const assigned=await api.saveShippingHandoff({collaborationId:candidate.id,mode:'shipping-owner',expected:handoffSnapshot(contextBefore),values:{owner_id:'owner-ivy',owner_name:'Ivy'}});
+assert.equal(assigned.saved.status,'Draft');assert.equal(assigned.saved.owner_id,'owner-ivy');
+assert.equal((await api.getOne('collaborations',candidate.id)).stage,stageBefore);
+assert.ok(!(await api.shippingHandoffRows()).some(row=>row.collaboration.id===candidate.id));
+const {renderRecipientDetails,latestShipment}=await import('../src/shipping-handoff.js');
+assert.ok(renderRecipientDetails({recipient_name:'Sample',full_address:'Line 1\nCountry'}).includes('<details>'));
+assert.equal(latestShipment([{id:'old',created_at:'2026-01-01'},{id:'new',created_at:'2026-02-01'}]).id,'new');
+assert.ok(app.includes("handoffUI.open(row.id,null,'outreach-owner')"));
+assert.ok(app.includes("handoffUI.open(row.id,null,'shipping-owner')"));
+assert.ok(uiSource.includes('Mark shipped'));assert.ok(uiSource.includes('Hand over for shipping'));
+console.log('Creator-first handoff: assigning an owner creates only a Draft, no automatic Stage or queue changes, separate owner shortcuts and readable recipients passed.');
+const addressContext=await api.shippingHandoffContext(candidate.id,assigned.saved.id);
+await api.saveShippingHandoff({collaborationId:candidate.id,shipmentId:assigned.saved.id,mode:'address',expected:handoffSnapshot(addressContext),values:{address_snapshot:{recipient_name:'Synthetic recipient',full_address:'Synthetic street\nCountry',phone:null}}});
+const afterAddress=await api.getOne('shipments',assigned.saved.id);
+assert.equal(afterAddress.status,'Draft');assert.equal(afterAddress.owner_id,'owner-ivy');
+assert.equal(afterAddress.address_snapshot.recipient_name,'Synthetic recipient');
+assert.ok(!(await api.shippingHandoffRows()).some(row=>row.collaboration.id===candidate.id));
+assert.ok(app.includes("handoffUI.open(row.id,null,'address')"));
+console.log('Direct recipient editing preserves shipping owner and draft state without implicit handoff.');

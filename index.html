@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Matchmate creator outreach and collaboration operations">
   <title>Matchmate Creator CRM</title>
-  <link rel="stylesheet" href="./styles.css?v=20261112-simple3">
+  <link rel="stylesheet" href="./styles.css?v=20261113-handoff4">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -88,19 +88,19 @@
             <label>Stage<select name="stage"></select></label>
             <label>Campaign<select name="campaign_id"></select></label>
             <label>Product<select name="product_id"></select></label>
-            <label>Owner<select name="owner_id"></select></label>
+            <label>Outreach owner<select name="owner_id"></select></label>
             <label>Start<input name="start_date" type="date"></label>
             <label>End<input name="end_date" type="date"></label>
             <button class="secondary clear-filters" type="button">Clear</button>
           </div>
           <div class="table-toolbar"><span id="collaborationCount" class="muted"></span><button id="exportCollaborationsBtn" class="secondary compact" type="button">Export CSV</button></div>
-          <div class="table-wrap"><table><thead><tr><th>Collaboration</th><th>Creator</th><th>Campaign</th><th>Stage</th><th>Products</th><th>Deliverables</th><th>Due</th><th>Owner</th><th class="action-col"></th></tr></thead><tbody id="collaborationRows"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Creator</th><th>Stage</th><th>Products &amp; quantity</th><th>Recipient details</th><th>Outreach owner</th><th>Shipping owner</th><th>Shipping handoff</th><th>Publication</th></tr></thead><tbody id="collaborationRows"></tbody></table></div>
           <div id="collaborationPagination" class="pagination"></div>
         </section>
         <section id="shippingHandoff" class="surface data-surface hidden">
-          <div id="handoffQueues" class="handoff-tabs table-toolbar" aria-label="Shipping queues"></div>
+          <h3 class="handoff-heading">Who needs a parcel?</h3><div id="handoffQueues" class="handoff-tabs table-toolbar" aria-label="Shipping queues"></div>
           <div class="filter-bar"><label>Shipping owner<select id="handoffOwner"><option value="">All</option></select></label><label class="search-field">Search<input id="handoffSearch" type="search" placeholder="Collaboration ID or creator"></label></div>
-          <div class="table-wrap"><table class="handoff-table"><thead><tr><th>Collaboration</th><th>Creator</th><th>Outreach owner</th><th>Shipping owner</th><th>Products</th><th>Shipping address</th><th>Status</th><th>Latest update</th></tr></thead><tbody id="handoffRows"></tbody></table></div>
+          <div class="handoff-column-head"><span>Send to</span><span>Products &amp; quantity</span><span>Recipient details</span><span>People</span><span>Shipping</span></div><div id="handoffRows" class="handoff-cards"></div>
           <div id="handoffCount" class="table-toolbar muted"></div>
           <details class="handoff-rules"><summary>Handoff rules</summary><ol><li>Confirm the creator's products, quantities and address. Assign one shipping owner, then submit.</li><li>Only ship orders assigned to you. Check any unclear order before sending.</li><li>Record dispatch on the day it leaves. A label alone does not mean shipped. Add tracking later if needed.</li><li>Confirm owner transfers together. Recheck any address or product changes before dispatch.</li></ol></details>
         </section>
@@ -118,6 +118,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./config.js?v=20261014-follower-autofetch1"></script>
-  <script type="module" src="./src/app.js?v=20261112-simple3"></script>
+  <script type="module" src="./src/app.js?v=20261113-handoff4"></script>
 </body>
 </html>
