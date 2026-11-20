@@ -21,4 +21,6 @@ assert.equal(row.owner_id,'outreach-person');assert.equal(row.shipments[0].owner
 assert.equal(row.shipments[0].status,'Draft');assert.equal(row.creator_shipping_address.recipient_name,'Sample recipient');
 assert.equal(row.collaboration_products[0].quantity,2);assert.equal(row.publications[0].url,'https://example.test/post');
 assert.ok(calls.every(c=>c.method==='GET'));assert.equal(calls.length,5);
+const shipmentSelect=new URL(calls.find(c=>new URL(c.url).pathname.endsWith('/shipments')).url).searchParams.get('select').split(',');
+for(const field of ['carrier','tracking_number','tracking_url'])assert.ok(shipmentSelect.includes(field),'live query must request '+field);
 console.log('Collaboration handoff list: authenticated batch reads, independent owners, saved address, products and publication; zero mutations passed.');

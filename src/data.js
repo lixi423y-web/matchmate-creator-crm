@@ -245,7 +245,7 @@ export async function collaborationPage(options={}){
     const items=[];
     for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`collaboration_products?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=collaboration_id,product_id,quantity,product:products(id,sku,name,category)&limit=1000`);items.push(...(page.data||[]))}
     const shipments=[];
-    for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`shipments?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=id,collaboration_id,status,owner_id,address_snapshot,created_at,updated_at&limit=1000`);shipments.push(...(page.data||[]));}
+    for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`shipments?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=id,collaboration_id,status,owner_id,address_snapshot,carrier,tracking_number,tracking_url,created_at,updated_at&limit=1000`);shipments.push(...(page.data||[]));}
     const addresses=[],publications=[];
     for(let start=0;start<result.data.length;start+=75){
       const chunk=result.data.slice(start,start+75),ids=chunk.map(r=>r.id),creatorIds=[...new Set(chunk.map(r=>r.creator_id))];
