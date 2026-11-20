@@ -1,11 +1,11 @@
 import{shippingLabel,latestShipment,renderRecipientDetails,renderProductLines,productSignature,requirePackingDetails,shippingStatusPatch}from'./shipping-handoff.js?v=20261113-handoff4';
-import{createShippingHandoffUI}from'./shipping-handoff-ui.js?v=20261120-tracking2';
+import{createShippingHandoffUI}from'./shipping-handoff-ui.js?v=20261120-tracking3';
 import{shippingAddressText,copyShippingAddress}from'./shipping-address.js';
 import{SHIPPING_COUNTRIES}from'./shipping-countries.js';
 import{startFollowerEnrichment}from'./follower-enrichment.js';
 import{instagramHandle,accountKey}from'./identity.js';
 import{OUTREACH_STATUSES,COLLABORATION_STAGES,FIT_VERDICTS,TIERS,ACCOUNT_TYPES,DOG_SIZES,RELATIONSHIPS,SHIPMENT_STATUSES,DELIVERABLE_STATUSES,PUBLICATION_STATUSES,RIGHTS_STATUSES,PAYMENT_STATUSES,DEFAULT_PAGE_SIZE,PAGE_SIZES,badgeClass}from'./constants.js?v=20260813-import1';
-import{autoFollowersEnabled,fetchCreatorFollowers,findCreatorDuplicates,dataMode,currentSession,restoreSession,signInWithPassword,signOut,onAuthStateChange,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,creatorAddressSnapshot,related,getOne,save,saveIfUnchanged,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,syncCollaborationStageForRecord,dashboardCounts,exportCreatorResults,exportCollaborationResults}from'./data.js?v=20261120-tracking2';
+import{autoFollowersEnabled,fetchCreatorFollowers,findCreatorDuplicates,dataMode,currentSession,restoreSession,signInWithPassword,signOut,onAuthStateChange,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,creatorAddressSnapshot,related,getOne,save,saveIfUnchanged,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,syncCollaborationStageForRecord,dashboardCounts,exportCreatorResults,exportCollaborationResults}from'./data.js?v=20261120-tracking3';
 
 const $=(selector,root=document)=>root.querySelector(selector);const $$=(selector,root=document)=>[...root.querySelectorAll(selector)];
 const CREATOR_SORT_DEFAULTS={display_name:'asc',primary_handle:'asc',created_at:'desc',last_contact_at:'desc',collaboration_count:'desc'};
@@ -197,7 +197,7 @@ function renderCollaborations(){
     $('.copy-recipient',tr)?.addEventListener('click',async()=>{const s=latestShipment(row.shipments),address=s&&shippingAddressText(s.address_snapshot).trim()?s.address_snapshot:row.creator_shipping_address;try{await copyShippingAddress(shippingAddressText(address));toast('Address copied.')}catch{toast('Expand the address and copy manually.')}});
     $('.delete-error-row',tr)?.addEventListener('click',event=>{event.stopPropagation();deleteErroneousRecord(tr.dataset.id,event.currentTarget)});
     $('.handoff-row',tr)?.addEventListener('click',()=>discardChangesThen(()=>shipmentDetails(row)));
-    $('.tracking-quick-edit',tr).forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();discardChangesThen(()=>handoffUI.open(row.id,button.dataset.shipmentId,'tracking'))}));
+    $$('.tracking-quick-edit',tr).forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();discardChangesThen(()=>handoffUI.open(row.id,button.dataset.shipmentId,'tracking'))}));
     bindProfileLinks(tr);tr.addEventListener('dblclick',()=>discardChangesThen(()=>openCollaboration(tr.dataset.id)));
   });renderPagination('collaboration');
 }

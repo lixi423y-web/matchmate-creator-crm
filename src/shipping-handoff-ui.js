@@ -1,6 +1,6 @@
 import{shippingAddressText,copyShippingAddress}from'./shipping-address.js';
 import{renderRecipientDetails,renderProductLines,HANDOFF_QUEUES,inHandoffQueue,shippingLabel,latestHandoffUpdate,handoffTime,handoffSnapshot}from'./shipping-handoff.js?v=20261113-handoff4';
-import{shippingHandoffRows,shippingHandoffContext,saveShippingHandoff,related,creatorAddressSnapshot}from'./data.js?v=20261120-tracking2';
+import{shippingHandoffRows,shippingHandoffContext,saveShippingHandoff,related,creatorAddressSnapshot}from'./data.js?v=20261120-tracking3';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function createShippingHandoffUI({owners,openProducts,openShipment,afterMutation,onError,notify,isActive,remember,initialMode='records'}){
  const $=selector=>document.querySelector(selector);

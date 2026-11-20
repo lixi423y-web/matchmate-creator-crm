@@ -21,4 +21,5 @@ assert.ok(html.includes('Shipping &amp; tracking'));
 assert.ok(ui.includes("let mode='records'"),'old saved shipping view returns to collaborations');
 assert.ok(ui.includes("openShipment(collaborationId)"),'view shipment stays in collaboration details');
 assert.ok(app.includes('renderCollaborationTracking(row.shipments)'));
+assert.ok(app.includes("$$('.tracking-quick-edit',tr).forEach"),'tracking controls must bind a collection, not a single element');
 console.log('Collaboration tracking: all active parcels, archived exclusion, safe links, edit/add, empty state, no mutations, single-page navigation passed.');
