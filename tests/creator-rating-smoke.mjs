@@ -16,7 +16,7 @@ nodes.creatorRatingDialog.showModal=()=>open=true;
 nodes.creatorRatingDialog.close=()=>open=false;
 let record={id:'test',display_name:'Test creator',tier:'A',fit_verdict:'Strong',owner_id:'owner',notes:'preserve'};
 const context=vm.createContext({TIERS,FIT_VERDICTS,OUTREACH_STATUSES,badgeClass,state:{actionBusy:false},
-  $:selector=>selector==='select'?{value}:nodes[selector.slice(1)],
+  $:selector=>selector==='select'?{value}:nodes[selector.slice(1)],ownerName:id=>id||'Unassigned',
   getOne:async()=>structuredClone(record),
   related:async()=>outreach?[structuredClone(outreach)]:[],
   save:async(table,payload)=>{if(fail)throw Error('Save failed');if(table==='outreach_records'){outreachWrites.push({...payload});outreach={...outreach,...payload,id:payload.id||'new-touch'};return outreach}writes.push({...payload});Object.assign(record,payload);return record},
@@ -49,4 +49,17 @@ await context.openCreatorRatingEditor('test','outreach_status');value='';await n
 await context.openCreatorRatingEditor('test','outreach_status');value='Negotiating';outreach.status='Paused';await nodes.saveCreatorRatingBtn.onclick();assert.equal(outreachWrites.length,1);assert.match(nodes.creatorRatingError.textContent,/teammate/);
 outreach=null;await context.openCreatorRatingEditor('test','outreach_status');value='Contacted';await nodes.saveCreatorRatingBtn.onclick();assert.deepEqual(outreachWrites[1],{creator_id:'test',status:'Contacted',channel:'Instagram DM',owner_id:'owner'});
 assert.deepEqual(record,creatorBefore);
-console.log('Creator Tier/Fit/Outreach: isolated writes, preservation of notes/contact/follow-up, missing outreach, valid options, no-op, failure, conflict, refresh and history passed.');
+context.state.refs={owners:[{id:'owner',name:'Existing owner'},{id:'new-owner',name:'New owner'}]};
+assert.ok(app.includes("creatorRatingCell(row,'owner_id')"));
+const previousFit=record.fit_verdict,previousTier=record.tier;
+await context.openCreatorRatingEditor('test','owner_id');
+assert.ok(nodes.creatorRatingFields.innerHTML.includes('Unassigned'));
+value='new-owner';await nodes.saveCreatorRatingBtn.onclick();
+assert.deepEqual(writes.at(-1),{id:'test',owner_id:'new-owner'});
+assert.equal(record.fit_verdict,previousFit);assert.equal(record.tier,previousTier);assert.equal(record.notes,'preserve');
+await context.openCreatorRatingEditor('test','owner_id');value='';await nodes.saveCreatorRatingBtn.onclick();
+assert.deepEqual(writes.at(-1),{id:'test',owner_id:null});
+await context.openCreatorRatingEditor('test','owner_id');const count=writes.length;
+value='unknown-owner';await nodes.saveCreatorRatingBtn.onclick();assert.equal(writes.length,count);
+value='new-owner';record.owner_id='owner';await nodes.saveCreatorRatingBtn.onclick();assert.equal(writes.length,count);assert.match(nodes.creatorRatingError.textContent,/teammate/);
+console.log('Creator Tier/Fit/Outreach/Owner: isolated writes, Unassigned, preservation, valid options, no-op, failure, conflict, refresh and history passed.');

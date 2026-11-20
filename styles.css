@@ -115,3 +115,6 @@
 #collaborationRecords table{min-width:1350px}#collaborationRows .collaboration-recipient{min-width:210px;max-width:300px}#collaborationRows .collaboration-person{min-width:110px}#collaborationRows .collaboration-handoff{min-width:170px}#collaborationRows .collaboration-handoff>.handoff-row{margin-top:9px}#collaborationRows .collaboration-publication{min-width:125px}.handoff-review{background:#f6f9fc;padding:13px;border:1px solid var(--line);border-radius:6px}
 @media(max-width:1250px){.handoff-column-head{display:none}.handoff-card{grid-template-columns:1fr 1fr;gap:18px}.handoff-creator{grid-column:1/-1;border-bottom:1px solid var(--line);padding-bottom:12px}.handoff-mobile-label{display:block;text-transform:uppercase;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:8px}.handoff-people,.handoff-actions{border-top:1px solid var(--line);padding-top:13px}}
 @media(max-width:560px){.handoff-card{grid-template-columns:1fr}.handoff-creator{grid-column:auto}}
+
+/* Keep parcel tracking readable within the collaboration list. */
+#collaborationRows .collaboration-tracking{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}#collaborationRows .tracking-number{display:block;max-width:240px;overflow-wrap:anywhere;white-space:normal;user-select:text}#collaborationRows .tracking-empty{display:block;margin-top:8px}

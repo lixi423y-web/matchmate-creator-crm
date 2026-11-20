@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Matchmate creator outreach and collaboration operations">
   <title>Matchmate Creator CRM</title>
-  <link rel="stylesheet" href="./styles.css?v=20261113-handoff4">
+  <link rel="stylesheet" href="./styles.css?v=20261120-tracking1">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -81,7 +81,6 @@
 
       <section id="collaborationsView" class="view">
         <div class="page-heading"><div><h2>Collaboration center</h2><p>One confirmed round per record, with products, shipments and content attached.</p></div><button id="newCollaborationBtn" type="button">Create order</button></div>
-        <nav class="handoff-tabs" aria-label="Collaboration views"><button type="button" class="secondary active" data-collaboration-mode="records" aria-pressed="true">Collaborations</button><button type="button" class="secondary" data-collaboration-mode="shipping" aria-pressed="false">Shipping handoff</button></nav>
         <section id="collaborationRecords" class="surface data-surface">
           <div id="collaborationFilters" class="filter-bar">
             <label class="search-field">Search<input name="search" type="search" placeholder="Collaboration ID, creator, campaign"></label>
@@ -94,7 +93,7 @@
             <button class="secondary clear-filters" type="button">Clear</button>
           </div>
           <div class="table-toolbar"><span id="collaborationCount" class="muted"></span><button id="exportCollaborationsBtn" class="secondary compact" type="button">Export CSV</button></div>
-          <div class="table-wrap"><table><thead><tr><th>Creator</th><th>Stage</th><th>Products &amp; quantity</th><th>Recipient details</th><th>Outreach owner</th><th>Shipping owner</th><th>Shipping handoff</th><th>Publication</th></tr></thead><tbody id="collaborationRows"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Creator</th><th>Stage</th><th>Products &amp; quantity</th><th>Recipient details</th><th>Outreach owner</th><th>Shipping owner</th><th>Shipping &amp; tracking</th><th>Publication</th></tr></thead><tbody id="collaborationRows"></tbody></table></div>
           <div id="collaborationPagination" class="pagination"></div>
         </section>
         <section id="shippingHandoff" class="surface data-surface hidden">
@@ -112,12 +111,12 @@
 
   <dialog id="handoffDialog" aria-labelledby="handoffTitle"><form id="handoffForm" method="dialog" class="dialog-form"><div class="section-head"><h2 id="handoffTitle"></h2><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p id="handoffSummary" class="muted"></p><div id="handoffFields"></div><p id="handoffError" class="form-error" role="alert"></p><menu><button value="cancel" class="secondary">Cancel</button><button id="handoffSave" type="button">Save</button></menu></form></dialog>
   <dialog id="creatorRatingDialog" aria-labelledby="creatorRatingTitle"><form method="dialog" class="dialog-form"><div class="section-head"><h2 id="creatorRatingTitle">Change rating</h2><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p id="creatorRatingName" class="muted"></p><div id="creatorRatingFields"></div><p class="muted">Only this field is changed. Other creator information stays unchanged.</p><p id="creatorRatingError" class="form-error" role="alert"></p><menu><button value="cancel" class="secondary">Cancel</button><button id="saveCreatorRatingBtn" type="button">Save changes</button></menu></form></dialog>
-  <dialog id="bulkDialog"><form method="dialog" class="dialog-form"><div class="section-head"><h2>Bulk update creators</h2><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p class="muted">Only selected fields are changed. Existing values are preserved.</p><label>Owner<select id="bulkOwner"></select></label><label>Stage / Outreach status<select id="bulkStage"></select></label><label>Fit verdict<select id="bulkFit"></select></label><label>Relationship<select id="bulkRelationship"></select></label><label>Tags<input id="bulkTags" placeholder="Comma-separated tags"></label><menu><button value="cancel" class="secondary">Cancel</button><button id="applyBulkBtn" value="default" type="button">Apply update</button></menu></form></dialog>
+  <dialog id="bulkDialog"><form method="dialog" class="dialog-form"><div class="section-head"><h2>Bulk update creators</h2><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p class="muted">Only selected fields are changed. Existing values are preserved.</p><label>Owner<select id="bulkOwner"></select></label><label>Stage / Outreach status<select id="bulkStage"></select></label><label>Tier<select id="bulkTier"></select></label><label>Fit verdict<select id="bulkFit"></select></label><label>Relationship<select id="bulkRelationship"></select></label><label>Tags<input id="bulkTags" placeholder="Comma-separated tags"></label><menu><button value="cancel" class="secondary">Cancel</button><button id="applyBulkBtn" value="default" type="button">Apply update</button></menu></form></dialog>
   <dialog id="creatorImportDialog" class="import-dialog"><form method="dialog" class="dialog-form"><div class="section-head"><div><p class="eyebrow">Creator database</p><h2>Import creators</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div><p class="muted">Preview first. Importing creators never creates collaborations or overwrites shipping and history records.</p><div class="import-controls"><label>CSV file<input id="creatorCsvFile" type="file" accept=".csv,text/csv"></label><label>Existing accounts<select id="creatorImportMode"><option value="skip">Skip existing (recommended)</option><option value="update">Update non-empty profile fields</option></select></label></div><button id="downloadCreatorTemplateBtn" class="secondary compact template-button" type="button">Download CSV template</button><div id="creatorImportSummary" class="import-summary muted">Choose a CSV to preview.</div><div id="creatorImportPreview" class="import-preview"></div><menu><button value="cancel" class="secondary">Cancel</button><button id="confirmCreatorImportBtn" value="default" type="button" disabled>Import creators</button></menu></form></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./config.js?v=20261014-follower-autofetch1"></script>
-  <script type="module" src="./src/app.js?v=20261113-handoff4"></script>
+  <script type="module" src="./src/app.js?v=20261120-tracking1"></script>
 </body>
 </html>

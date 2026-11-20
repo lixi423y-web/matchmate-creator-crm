@@ -4,7 +4,7 @@ import{shippingHandoffRows,shippingHandoffContext,saveShippingHandoff,related,cr
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function createShippingHandoffUI({owners,openProducts,openShipment,afterMutation,onError,notify,isActive,remember,initialMode='records'}){
  const $=selector=>document.querySelector(selector);
- let mode=initialMode==='shipping'?'shipping':'records',queue='Pending',rows=[],epoch=0,editing=null,busy=false;
+ let mode='records',queue='Pending',rows=[],epoch=0,editing=null,busy=false;
  const ownerName=id=>owners().find(p=>p.id===id)?.name||'Unassigned';
  function applyMode(){const shipping=mode==='shipping';$('#collaborationRecords').classList.toggle('hidden',shipping);$('#shippingHandoff').classList.toggle('hidden',!shipping);for(const button of document.querySelectorAll('[data-collaboration-mode]')){const active=button.dataset.collaborationMode===mode;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));}}
  function bind(){
@@ -38,13 +38,13 @@ export function createShippingHandoffUI({owners,openProducts,openShipment,afterM
 
   $('#handoffCount').textContent=filtered.length+' shipments';
  }
- async function show(collaborationId){mode='shipping';queue='All';applyMode();remember();$('#handoffSearch').value=collaborationId||'';$('#handoffOwner').value='';await load();}
+ async function show(collaborationId){mode='records';applyMode();remember();openShipment(collaborationId);}
  async function open(collaborationId,shipmentId,action){
   if(busy)return;const token=epoch;
   try{
    const context=await shippingHandoffContext(collaborationId,shipmentId);if(token!==epoch||!isActive())return;
    const {collaboration:c,shipment:s}=context;
-   if(action==='submit'&&s&&s.status!=='Draft')return show(c.collaboration_code||c.id);
+   if(action==='submit'&&s&&s.status!=='Draft')return show(c.id);
    const ownerOptions=(value,blank=true)=>(blank?'<option value="">Select</option>':'')+owners().map(p=>'<option value="'+esc(p.id)+'" '+(p.id===value?'selected':'')+'>'+esc(p.name)+'</option>').join('');
    let fields='',title='',saveText='Save';
    if(action==='submit'||action==='address'){
