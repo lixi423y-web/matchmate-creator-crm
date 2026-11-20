@@ -1,6 +1,7 @@
+import{shippingAddressText}from'./shipping-address.js';
 import{demoDatabase}from'./demo.js?v=20260825-shared-auth1';
 import{instagramHandle,accountKey,creatorSearch,validateInstagramAccount}from'./identity.js';
-import{handoffSnapshot,requirePackingDetails,shippingStatusPatch}from'./shipping-handoff.js?v=20261113-handoff4';
+import{handoffSnapshot,requirePackingDetails,shippingStatusPatch,directShippingPatch,latestShipment}from'./shipping-handoff.js?v=20261120-simple1';
 
 const cfg=window.MATCHMATE_CONFIG||{};
 const publishableKey=cfg.supabasePublishableKey||cfg.supabaseAnonKey||'';
@@ -199,10 +200,23 @@ export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,
     else saved=await insertFirst(patch);
     before=s;entityType='shipments';summary='Submitted for shipping · '+values.owner_name;
   }else if(mode==='address'){
-    if(!String(values.address_snapshot?.recipient_name||'').trim()||!String(values.address_snapshot?.full_address||'').trim())throw Error('Enter the recipient name and full shipping address.');
+    if(s&&['Shipped','Delivered'].includes(s.status)&&!shippingAddressText(values.address_snapshot).trim())throw Error('Keep the recipient details for an existing shipment.');
     const patch={address_snapshot:values.address_snapshot,address_id:null};
     saved=s?await saveIfUnchanged('shipments',s,patch):await insertFirst({...patch,collaboration_id:c.id,status:'Draft',owner_id:null});
     before=s;entityType='shipments';summary='Recipient details updated';
+  }else if(mode==='direct-status'){
+    const patch=directShippingPatch(s,values);
+    let snapshot=s?.address_snapshot;
+    if(!shippingAddressText(snapshot).trim()){const addresses=await related('creator_addresses','creator_id',c.creator_id),address=addresses.find(a=>a.is_default)||addresses[0];snapshot=creatorAddressSnapshot(address||{});if(shippingAddressText(snapshot).trim())patch.address_snapshot=snapshot;}
+    if(['Shipped','Delivered'].includes(patch.status))requirePackingDetails(products,snapshot,s?.owner_id);
+    if(s&&Object.entries(patch).every(([key,value])=>JSON.stringify(s[key]??null)===JSON.stringify(value??null)))return{unchanged:true};
+    saved=s?await saveIfUnchanged('shipments',s,patch):await insertFirst({...patch,collaboration_id:c.id,address_snapshot:snapshot||{}});
+    before=s;entityType='shipments';summary='Shipping status: '+values.status;
+  }else if(mode==='tracking'){
+    const patch={};for(const key of ['carrier','tracking_number'])if(Object.hasOwn(values,key))patch[key]=String(values[key]||'').trim()||null;
+    if(!Object.keys(patch).length||Object.entries(patch).every(([key,value])=>(s?.[key]??null)===value))return{unchanged:true};
+    saved=s?await saveIfUnchanged('shipments',s,patch):await insertFirst({...patch,collaboration_id:c.id,status:'Draft',address_snapshot:{}});
+    before=s;entityType='shipments';summary='Tracking updated';
   }else if(mode==='shipping-owner'&&!s){
     if(!values.owner_id)throw Error('Choose a shipping owner.');
     saved=await insertFirst({collaboration_id:c.id,status:'Draft',owner_id:values.owner_id,address_snapshot:{}});
@@ -217,10 +231,6 @@ export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,
     }else if(mode==='status'){
       patch=shippingStatusPatch(s,values.status,values);if(!patch)return{unchanged:true};
       if(values.status==='Shipped'){requirePackingDetails(products,s.address_snapshot,s.owner_id);summary='Shipped · '+(values.owner_name||'Assigned owner');}else summary='Marked delivered';
-    }else if(mode==='tracking'){
-      if(!String(values.tracking_number||'').trim())throw Error('Enter a tracking number.');
-      patch={carrier:values.carrier||null,tracking_number:values.tracking_number.trim()};summary='Tracking updated';
-      if(patch.carrier===s.carrier&&patch.tracking_number===s.tracking_number)return{unchanged:true};
     }else throw Error('Unknown handoff action.');
     saved=await saveIfUnchanged('shipments',s,patch);before=s;entityType='shipments';
   }
@@ -238,9 +248,20 @@ export async function count(table,filters={}){
   const q=new URLSearchParams({select:'id',limit:'1',archived_at:'is.null'});Object.entries(filters).forEach(([k,v])=>q.set(k,`eq.${v}`));const result=await request(`${table}?${q}`,{headers:{Prefer:'count=exact'}});return result.count||0;
 }
 export async function collaborationPage(options={}){
-  if(demoMode){let rows=demo.collaborations.map(row=>hydrateCollaboration(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,v])=>v!==''&&v!=null).forEach(([key,value])=>{rows=rows.filter(row=>key==='product_id'?row.collaboration_products.some(item=>item.product_id===value):String(row[key]??'')===String(value))});const[field,direction]=sort.split('.');rows.sort((a,b)=>String(a[field]||'').localeCompare(String(b[field]||''))*(direction==='asc'?1:-1));return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
-  const query=encodeListQuery({...options,searchFields:['collaboration_code','collaboration_name','creator_name','creator_handle','campaign_name','product_names']});
-  const result=await request(`collaboration_directory?${query}`,{headers:{Prefer:'count=exact'}});
+  if(demoMode){let rows=demo.collaborations.map(row=>hydrateCollaboration(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,v])=>v!==''&&v!=null).forEach(([key,value])=>{rows=rows.filter(row=>key==='shipping_owner_id'?(value==='__unassigned__'?!latestShipment(row.shipments)?.owner_id:latestShipment(row.shipments)?.owner_id===value):key==='shipping_status'?(value==='Pending'?!['Shipped','Delivered'].includes(latestShipment(row.shipments)?.status):latestShipment(row.shipments)?.status===value):key==='product_id'?row.collaboration_products.some(item=>item.product_id===value):String(row[key]??'')===String(value))});const[field,direction]=sort.split('.');rows.sort((a,b)=>String(a[field]||'').localeCompare(String(b[field]||''))*(direction==='asc'?1:-1));return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
+  const {shipping_owner_id='',shipping_status='',...baseFilters}=options.filters||{};
+  let shippingQuery='';
+  if(shipping_owner_id||shipping_status){
+    const shipments=await allActiveRows('shipments'),byCollaboration=new Map();
+    for(const s of shipments){const group=byCollaboration.get(s.collaboration_id)||[];group.push(s);byCollaboration.set(s.collaboration_id,group);}
+    const latest=[...byCollaboration.values()].map(latestShipment).filter(Boolean),matches=s=>(!shipping_owner_id||(shipping_owner_id==='__unassigned__'?!s.owner_id:s.owner_id===shipping_owner_id))&&(!shipping_status||(shipping_status==='Pending'?!['Shipped','Delivered'].includes(s.status):s.status===shipping_status));
+    const includesMissing=(!shipping_owner_id||shipping_owner_id==='__unassigned__')&&(!shipping_status||shipping_status==='Pending');
+    const ids=latest.filter(s=>includesMissing?!matches(s):matches(s)).map(s=>s.collaboration_id);
+    if(!includesMissing&&!ids.length)return{data:[],count:0};
+    if(ids.length)shippingQuery='&id='+(includesMissing?'not.in.':'in.')+'('+[...new Set(ids)].join(',')+')';
+  }
+  const query=encodeListQuery({...options,filters:baseFilters,searchFields:['collaboration_code','collaboration_name','creator_name','creator_handle','campaign_name','product_names']});
+  const result=await request(`collaboration_directory?${query}${shippingQuery}`,{headers:{Prefer:'count=exact'}});
   if(result.data?.length){
     const items=[];
     for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`collaboration_products?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=collaboration_id,product_id,quantity,product:products(id,sku,name,category)&limit=1000`);items.push(...(page.data||[]))}

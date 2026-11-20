@@ -50,3 +50,15 @@ export function renderRecipientDetails(snapshot){
  const preview=full.split('\n').filter(Boolean).slice(-2).join(' · ');
  return'<div class="recipient-preview"><strong>'+escape(snapshot?.recipient_name||'Saved address')+'</strong><small>'+escape(preview)+'</small></div><details><summary>Show details</summary><pre class="shipping-address-text">'+escape(full)+'</pre></details>';
 }
+
+export const directShippingLabel=status=>['Shipped','Delivered'].includes(status)?status:'Pending';
+export function directShippingPatch(before,values={},now=new Date().toISOString()){
+ const current=before?.status||'Draft',status=values.status;
+ if(!['Pending','Shipped','Delivered'].includes(status))throw Error('Choose a valid shipping status.');
+ if(['Shipped','Delivered'].includes(current)&&status==='Pending'||current==='Delivered'&&status==='Shipped')throw Error('A sent parcel cannot be reset to an earlier status.');
+ const patch={status:status==='Pending'?current:status};
+ for(const key of ['carrier','tracking_number'])if(Object.hasOwn(values,key))patch[key]=String(values[key]||'').trim()||null;
+ if(status==='Shipped'&&!['Shipped','Delivered'].includes(current)&&!before?.shipped_at)patch.shipped_at=now;
+ if(status==='Delivered'&&current!=='Delivered'){if(!before?.shipped_at)patch.shipped_at=now;patch.delivered_at=now;}
+ return patch;
+}

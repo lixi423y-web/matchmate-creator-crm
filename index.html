@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Matchmate creator outreach and collaboration operations">
   <title>Matchmate Creator CRM</title>
-  <link rel="stylesheet" href="./styles.css?v=20261120-tracking3">
+  <link rel="stylesheet" href="./styles.css?v=20261120-simple1">
 </head>
 <body>
   <section id="authGate" class="auth-gate">
@@ -87,7 +87,7 @@
             <label>Stage<select name="stage"></select></label>
             <label>Campaign<select name="campaign_id"></select></label>
             <label>Product<select name="product_id"></select></label>
-            <label>Outreach owner<select name="owner_id"></select></label>
+            <label>Outreach owner<select name="owner_id"></select></label><label>Shipping owner<select name="shipping_owner_id"></select></label><label>Shipping status<select name="shipping_status"><option value="">All</option><option>Pending</option><option>Shipped</option><option>Delivered</option></select></label>
             <label>Start<input name="start_date" type="date"></label>
             <label>End<input name="end_date" type="date"></label>
             <button class="secondary clear-filters" type="button">Clear</button>
@@ -117,6 +117,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./config.js?v=20261014-follower-autofetch1"></script>
-  <script type="module" src="./src/app.js?v=20261120-tracking3"></script>
+  <script type="module" src="./src/app.js?v=20261120-simple1"></script>
 </body>
 </html>

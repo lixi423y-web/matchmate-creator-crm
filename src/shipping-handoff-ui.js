@@ -1,6 +1,6 @@
 import{shippingAddressText,copyShippingAddress}from'./shipping-address.js';
-import{renderRecipientDetails,renderProductLines,HANDOFF_QUEUES,inHandoffQueue,shippingLabel,latestHandoffUpdate,handoffTime,handoffSnapshot}from'./shipping-handoff.js?v=20261113-handoff4';
-import{shippingHandoffRows,shippingHandoffContext,saveShippingHandoff,related,creatorAddressSnapshot}from'./data.js?v=20261120-tracking3';
+import{renderRecipientDetails,renderProductLines,HANDOFF_QUEUES,inHandoffQueue,shippingLabel,latestHandoffUpdate,handoffTime,handoffSnapshot}from'./shipping-handoff.js?v=20261120-simple1';
+import{shippingHandoffRows,shippingHandoffContext,saveShippingHandoff,related,creatorAddressSnapshot}from'./data.js?v=20261120-simple1';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function createShippingHandoffUI({owners,openProducts,openShipment,afterMutation,onError,notify,isActive,remember,initialMode='records'}){
  const $=selector=>document.querySelector(selector);
@@ -51,11 +51,12 @@ export function createShippingHandoffUI({owners,openProducts,openShipment,afterM
     const addresses=await related('creator_addresses','creator_id',c.creator_id);if(token!==epoch||!isActive())return;
     const address=addresses.find(a=>a.is_default)||addresses[0],snapshot=shippingAddressText(s?.address_snapshot)?s.address_snapshot:creatorAddressSnapshot(address||{});
     context.addressId=s?.address_id||address?.id||null;context.addressText=shippingAddressText(snapshot);
-    context.addressSnapshot=snapshot;if(action==='address'){title='Recipient details';fields='<label>Recipient name<input name="recipient_name" value="'+esc(snapshot.recipient_name||'')+'"></label><label>Shipping address<textarea name="full_address" rows="5">'+esc(snapshot.full_address||snapshot.formatted_address||snapshot.line||context.addressText)+'</textarea></label><label>Phone (optional)<input name="phone" value="'+esc(snapshot.phone||'')+'"></label>';}else{title='Hand over for shipping';saveText='Hand over';$('#handoffSummary').textContent='';
+    context.addressSnapshot=snapshot;if(action==='address'){title='Recipient details';fields='<label>Recipient details<textarea name="full_address" rows="9" placeholder="Paste the full name, address, postal code and phone here">'+esc(context.addressText)+'</textarea></label>';}else{title='Hand over for shipping';saveText='Hand over';$('#handoffSummary').textContent='';
     fields='<div class="handoff-review">'+renderProductLines(context.products)+'<div style="margin-top:14px">'+renderRecipientDetails(snapshot)+'</div><button type="button" class="handoff-change" data-review-address>Edit recipient details</button></div><label>Who will ship this parcel?<select name="owner_id">'+ownerOptions(s?.owner_id)+'</select></label>';}
    }else if(action==='outreach-owner'){title='Change outreach owner';fields='<label>Outreach owner<select name="owner_id">'+ownerOptions(c.owner_id)+'</select></label>';}
    else if(action==='shipping-owner'){title='Change shipping owner';fields='<label>Shipping owner<select name="owner_id">'+ownerOptions(s?.owner_id)+'</select></label>';}
-   else if(action==='tracking'){title='Add tracking';fields='<label>Carrier<input name="carrier" value="'+esc(s.carrier)+'"></label><label>Tracking number<input name="tracking_number" value="'+esc(s.tracking_number)+'"></label>';}
+   else if(action==='tracking'){title='Tracking details';fields='<label>Carrier (optional)<input name="carrier" value="'+esc(s?.carrier||'')+'"></label><label>Tracking number (optional)<input name="tracking_number" value="'+esc(s?.tracking_number||'')+'"></label>';}
+   else if(action==='direct-status'){title='Change shipping status';const current=['Shipped','Delivered'].includes(s?.status)?s.status:'Pending';fields='<label>Shipping status<select name="status">'+['Pending','Shipped','Delivered'].map(value=>'<option value="'+value+'" '+(value===current?'selected':'')+'>'+value+'</option>').join('')+'</select></label><label>Carrier (optional)<input name="carrier" value="'+esc(s?.carrier||'')+'"></label><label>Tracking number (optional)<input name="tracking_number" value="'+esc(s?.tracking_number||'')+'"></label>';}
    else if(action==='dispatch'){
     if(s?.status!=='Ready')throw Error('This parcel is no longer waiting to ship. Refresh first.');
     title='Mark shipped';saveText='Confirm shipped';
@@ -77,7 +78,7 @@ export function createShippingHandoffUI({owners,openProducts,openShipment,afterM
   if(!editing||busy)return;const entry=editing,form=new FormData($('#handoffForm')),values=Object.fromEntries(form);values.confirmed=form.has('confirmed');values.owner_name=ownerName(values.owner_id||entry.context.shipment?.owner_id);values.previous_owner_name=ownerName(entry.context.shipment?.owner_id);
   if(values.owner_id&&!owners().some(p=>p.id===values.owner_id)){$('#handoffError').textContent='Choose a valid owner.';return;}
   if(entry.action==='submit'){values.address_snapshot=entry.context.addressSnapshot;values.address_id=entry.context.addressId;}
-  if(entry.action==='address')values.address_snapshot={recipient_name:String(values.recipient_name||'').trim(),full_address:String(values.full_address||'').trim(),phone:String(values.phone||'').trim()||null,source:'shipment'};
+  if(entry.action==='address')values.address_snapshot={full_address:String(values.full_address||'').trim(),source:'shipment'};
   busy=true;$('#handoffError').textContent='';const controls=[...$('#handoffForm').querySelectorAll('button,input,select,textarea')];controls.forEach(c=>c.disabled=true);
   try{
    const result=await saveShippingHandoff({collaborationId:entry.context.collaboration.id,shipmentId:entry.context.shipment?.id,mode:entry.action,values,expected:entry.expected});
