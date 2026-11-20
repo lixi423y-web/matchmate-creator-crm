@@ -539,6 +539,19 @@ function summarizeDashboard({totalCreators,outreach=[],collaborations=[],shipmen
 function stamp(row){return new Date(row.updated_at||row.last_contact_at||row.created_at||0).valueOf()||0}
 function rate(numerator,denominator){return{numerator,denominator,percent:denominator?Math.round(numerator/denominator*100):0}}
 export function exportRows(filename,rows){if(!rows.length)return;const keys=[...new Set(rows.flatMap(Object.keys))].filter(key=>!['creator_accounts','outreach_records','collaborations','creator','campaign','collaboration_products','shipments','deliverables','publications','creator_shipping_address'].includes(key));const csv=[keys.join(','),...rows.map(row=>keys.map(key=>`"${String(Array.isArray(row[key])?row[key].join('|'):row[key]??'').replaceAll('"','""')}"`).join(','))].join('\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)}
-export async function exportCreatorResults(options){return exportPaged('matchmate-creators.csv',creatorPage,options)}
+export async function exportCreatorResults(options={}){
+ if(!Object.hasOwn(options,'selectedIds'))return exportPaged('matchmate-creators.csv',creatorPage,options);
+ const ids=[...new Set(options.selectedIds||[])];if(!ids.length)throw Error('Select at least one creator.');
+ if(!demoMode&&ids.some(id=>!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id)))throw Error('Invalid creator selection. Clear the selection and try again.');
+ const rows=[];
+ if(demoMode){for(const id of ids){const row=demo.creators.find(c=>c.id===id&&!c.archived_at);if(row)rows.push(hydrateCreator(row));}}
+ else for(let start=0;start<ids.length;start+=100){const chunk=ids.slice(start,start+100),query=new URLSearchParams({select:'*',id:'in.('+chunk.join(',')+')',limit:String(chunk.length)});const result=await request('creator_directory?'+query);rows.push(...(result.data||[]));}
+ const byId=new Map(rows.filter(row=>ids.includes(row.id)).map(row=>[row.id,row]));
+ if(ids.some(id=>!byId.has(id)))throw Error('Some selected creators are no longer available. Refresh and reselect; no file was downloaded.');
+ const selected=ids.map(id=>byId.get(id)),complete=demoMode?selected:await attachPrimaryFollowers(selected);
+ // CSV cells beginning with formula characters must remain text in spreadsheet apps.
+ const safe=complete.map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,typeof value==='string'&&/^[\s]*[=+@-]/.test(value)?"'"+value:value])));
+ exportRows('matchmate-selected-creators-'+ids.length+'.csv',safe);return ids.length;
+}
 export async function exportCollaborationResults(options){return exportPaged('matchmate-collaborations.csv',collaborationPage,options)}
 async function exportPaged(filename,loader,options){const pageSize=500,rows=[];for(let page=1;page<=20;page++){const result=await loader({...options,page,pageSize});rows.push(...result.data);if(rows.length>=result.count||result.data.length<pageSize)break}exportRows(filename,rows);return rows.length}
