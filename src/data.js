@@ -75,6 +75,9 @@ export function normalizeWritePayload(record={},table=''){
   }
   for(const key of NULLABLE_TEXT_FIELDS[table]||[]){if(key in payload&&typeof payload[key]==='string'&&!payload[key].trim())payload[key]=null}
   if(!isUpdate)for(const[key,value]of Object.entries(SAFE_DEFAULTS[table]||{})){if(!(key in payload)||payload[key]===''||payload[key]==null)payload[key]=value}
+  if(table==='shipments'&&String(payload.tracking_number||'').trim()&&['Draft','Ready'].includes(payload.status)){
+    payload.status='Shipped';payload.shipped_at=payload.shipped_at||new Date().toISOString();
+  }
   return payload;
 }
 export function creatorAddressSnapshot(address={}){
@@ -181,13 +184,21 @@ export async function shippingHandoffContext(collaborationId,shipmentId=null){
   const [collaboration,shipments,products]=await Promise.all([getOne('collaborations',collaborationId),related('shipments','collaboration_id',collaborationId),related('collaboration_products','collaboration_id',collaborationId,'*,product:products(id,sku,name,category)')]);
   if(!collaboration||collaboration.archived_at||collaboration.stage==='Closed')throw Error('This collaboration is closed or unavailable.');
   const creator=await getOne('creators',collaboration.creator_id);
-  const shipment=shipmentId?shipments.find(s=>s.id===shipmentId):shipments[0]||null;
+  const shipment=shipmentId?shipments.find(s=>s.id===shipmentId):latestShipment(shipments);
   if(shipmentId&&!shipment)throw Error('HANDOFF_CONFLICT');
   return{collaboration:{...collaboration,creator_name:creator?.display_name||creator?.nickname||'Creator'},shipment,products};
 }
 export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,values={},expected}){
   const context=await shippingHandoffContext(collaborationId,shipmentId),{collaboration:c,shipment:s,products}=context;
   if(handoffSnapshot(context)!==expected)throw Error('HANDOFF_CONFLICT');
+  if(mode==='shipping-owner'&&values.owner_id&&values.owner_id!==s?.owner_id&&!s?.tracking_number){
+    const siblings=(await related('collaborations','creator_id',c.creator_id)).filter(row=>row.id!==c.id);
+    for(const row of siblings){
+      if(!(await related('shipments','collaboration_id',row.id)).some(parcel=>String(parcel.tracking_number||'').trim()))continue;
+      if(!window.confirm('This creator already has tracking on '+(row.collaboration_code||row.id)+'. Assign shipping on this separate order '+(c.collaboration_code||c.id)+'?'))return{unchanged:true};
+      break;
+    }
+  }
   let saved,before,entityType,summary;
   const insertFirst=async patch=>{const payload=normalizeWritePayload({...patch,id:c.id},'shipments');if(demoMode){if(await getOne('shipments',c.id))throw Error('HANDOFF_CONFLICT');return save('shipments',payload);}const r=await request('shipments?select=*',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return r.data?.[0];};
   if(mode==='outreach-owner'){
@@ -215,8 +226,9 @@ export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,
     before=s;entityType='shipments';summary='Shipping status: '+values.status;
   }else if(mode==='tracking'){
     const patch={};for(const key of ['carrier','tracking_number'])if(Object.hasOwn(values,key))patch[key]=String(values[key]||'').trim()||null;
+    if(patch.tracking_number&&['Draft','Ready'].includes(s?.status||'Draft'))Object.assign(patch,{status:'Shipped',shipped_at:s?.shipped_at||new Date().toISOString()});
     if(!Object.keys(patch).length||Object.entries(patch).every(([key,value])=>(s?.[key]??null)===value))return{unchanged:true};
-    saved=s?await saveIfUnchanged('shipments',s,patch):await insertFirst({...patch,collaboration_id:c.id,status:'Draft',address_snapshot:{}});
+    saved=s?await saveIfUnchanged('shipments',s,patch):await insertFirst({status:'Draft',...patch,collaboration_id:c.id,address_snapshot:{}});
     before=s;entityType='shipments';summary='Tracking updated';
   }else if(mode==='shipping-owner'&&!s){
     if(!values.owner_id)throw Error('Choose a shipping owner.');
