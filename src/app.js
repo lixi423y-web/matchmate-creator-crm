@@ -1,12 +1,12 @@
 import{collaborationExportMatrix,downloadCollaborationCsv}from'./collaboration-export.js?v=20261121-collab-export1';
 import{shippingLabel,directShippingLabel,latestShipment,renderRecipientDetails,renderProductLines,productSignature,requirePackingDetails,shippingStatusPatch}from'./shipping-handoff.js?v=20261120-simple1';
-import{createShippingHandoffUI}from'./shipping-handoff-ui.js?v=20261121-collab-export1';
+import{createShippingHandoffUI}from'./shipping-handoff-ui.js?v=20261122-ysd1';
 import{shippingAddressText,copyShippingAddress}from'./shipping-address.js';
 import{SHIPPING_COUNTRIES}from'./shipping-countries.js';
 import{startFollowerEnrichment}from'./follower-enrichment.js';
 import{instagramHandle,accountKey}from'./identity.js';
 import{OUTREACH_STATUSES,COLLABORATION_STAGES,FIT_VERDICTS,TIERS,ACCOUNT_TYPES,DOG_SIZES,RELATIONSHIPS,SHIPMENT_STATUSES,DELIVERABLE_STATUSES,PUBLICATION_STATUSES,RIGHTS_STATUSES,PAYMENT_STATUSES,DEFAULT_PAGE_SIZE,PAGE_SIZES,badgeClass}from'./constants.js?v=20260813-import1';
-import{autoFollowersEnabled,fetchCreatorFollowers,findCreatorDuplicates,dataMode,currentSession,restoreSession,signInWithPassword,signOut,onAuthStateChange,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,creatorAddressSnapshot,related,getOne,save,saveIfUnchanged,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,syncCollaborationStageForRecord,dashboardCounts,exportCreatorResults,exportCollaborationResults,selectedCollaborationRows}from'./data.js?v=20261121-collab-export1';
+import{autoFollowersEnabled,fetchCreatorFollowers,findCreatorDuplicates,dataMode,currentSession,restoreSession,signInWithPassword,signOut,onAuthStateChange,creatorPage,collaborationPage,creatorChoices,existingCreatorAccounts,importCreators,createCreatorWithPrimaryAccount,saveCreatorAccount,creatorAddressSnapshot,related,getOne,save,saveIfUnchanged,archive,referenceData,createOrderForCreator,createCollaborationFromOutreach,cancelCollaboration,deleteErroneousCollaboration,bulkUpdateCreators,logActivity,syncCollaborationProducts,syncCollaborationStageForRecord,dashboardCounts,exportCreatorResults,exportCollaborationResults,selectedCollaborationRows}from'./data.js?v=20261122-ysd1';
 
 const $=(selector,root=document)=>root.querySelector(selector);const $$=(selector,root=document)=>[...root.querySelectorAll(selector)];
 const CREATOR_SORT_DEFAULTS={display_name:'asc',primary_handle:'asc',created_at:'desc',last_contact_at:'desc',collaboration_count:'desc'};
@@ -39,6 +39,7 @@ async function logout(){const button=$('#logoutBtn');button.disabled=true;showLo
 function showLoginError(text){const error=$('#loginError');error.textContent=text;error.classList.toggle('hidden',!text)}
 function showLogin(error=''){authGeneration++;appStarted=false;clearCrmData();$('#app').classList.add('hidden');$('#authGate').classList.remove('hidden');$('#loginPassword').value='';setPasswordVisibility(false);showLoginError(error)}
 function clearCrmData(){
+  document.querySelector('#ysdPreview')?.close();
   handoffUI.clear();
   state.creators=[];state.creatorCount=0;state.collaborations=[];state.collaborationCount=0;state.creatorSelection.clear();state.collaborationSelection.clear();exportSelectionSnapshot=[];$('#collaborationExportDialog').open&&$('#collaborationExportDialog').close();state.creatorImport={rows:[],existing:[],mode:'skip'};state.refs={owners:[],campaigns:[],products:[],creatorOptions:[]};state.drawer=null;state.draft=null;state.request.creator++;state.request.collaboration++;state.request.detail++;state.request.drawerRender++;
   $('#drawer').classList.remove('open');$('#drawer').setAttribute('aria-hidden','true');for(const id of ['dashboardCards','bottleneckNote','outreachTasks','collaborationTasks','creatorProgress','productMix','creatorRows','creatorPagination','collaborationRows','collaborationPagination','drawerBody','drawerFooter']){const node=$(`#${id}`);if(node)node.textContent=''}
@@ -61,6 +62,10 @@ function bindStatic(){
   $('#collaborationSelectPageCheck').addEventListener('change',event=>{state.collaborations.forEach(r=>event.target.checked?state.collaborationSelection.add(r.id):state.collaborationSelection.delete(r.id));renderCollaborations()});
   $('#collaborationClearSelection').addEventListener('click',()=>{state.collaborationSelection.clear();renderCollaborations()});
   $('#exportSelectedCollaborationsBtn').addEventListener('click',previewSelectedCollaborations);
+  $('#exportYsdBtn').addEventListener('click',async()=>{
+    const ids=[...state.collaborationSelection],epoch=authGeneration;if(!ids.length)return;
+    const result=await runAction($('#exportYsdBtn'),'Preparing YSD export',async()=>{const [{previewYsd},rows]=await Promise.all([import('./ysd-ui.js'),selectedCollaborationRows(ids)]);if(appStarted&&epoch===authGeneration)previewYsd(rows);},{buttonText:'Preparing…',inlineError:false});renderCollaborationSelection();
+  });
   $('#downloadSelectedCollaborationsBtn').addEventListener('click',()=>{if(!exportSelectionSnapshot.length)return;downloadCollaborationCsv(exportSelectionSnapshot,state.refs.owners,'matchmate-selected-collaborations-'+exportSelectionSnapshot.length+'.csv');$('#collaborationExportDialog').close();toast('Exported '+exportSelectionSnapshot.length+' selected collaborations.')});
   window.addEventListener('beforeunload',warnBeforeUnload);
 }
@@ -118,6 +123,7 @@ async function previewSelectedCollaborations(){
  $('#collaborationExportDialog').showModal();
 }
 function renderCollaborationSelection(){
+ $('#exportYsdBtn').disabled=!state.collaborationSelection.size;
  const n=state.collaborationSelection.size,button=$('#exportSelectedCollaborationsBtn'),control=$('#collaborationSelectPageCheck'),count=state.collaborations.filter(r=>state.collaborationSelection.has(r.id)).length;
  button.disabled=!n;button.textContent='Export selected CSV ('+n+')';$('#collaborationSelectionCount').textContent=n+' selected';
  control.checked=state.collaborations.length>0&&count===state.collaborations.length;control.indeterminate=count>0&&count<state.collaborations.length;control.disabled=!state.collaborations.length;
