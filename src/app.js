@@ -301,7 +301,7 @@ async function renderCollaborationRelations(c,tab,body){
     if(!activeDrawer('collaboration',c.id,tab))return;
     state.drawer.shipmentAddress=preferredCreatorAddress(addresses);
     const context=handoffBanner('Fulfillment handoff','The saved creator address is copied automatically. Save a Draft now; carrier, tracking and dates can be added later.')+packingList(products);
-    if(!rows.length){const record=newShipmentDraft(c,state.drawer.shipmentAddress);body.dataset.inlineEditor='true';body.innerHTML=context+relatedEditorForm('shipments',record,false);bindRelatedEditor('shipments',c,record);return}
+    if(!rows.length){const record={...newShipmentDraft(c,state.drawer.shipmentAddress),firstShipmentOnly:true};body.dataset.inlineEditor='true';body.innerHTML=context+relatedEditorForm('shipments',record,false);bindRelatedEditor('shipments',c,record);return}
     body.innerHTML=context+relatedEditorSection('shipments','Shipments',rows,row=>row.shipment_code||shortId(row.id,'SH'),row=>`${row.status} · ${ownerName(row.owner_id)} · ${row.carrier||''} ${row.tracking_number||''}`,true);
     bindRelatedRows('shipments',c,rows);return;
   }

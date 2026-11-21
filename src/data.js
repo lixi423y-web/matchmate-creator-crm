@@ -145,12 +145,22 @@ export async function related(table,column,id,select='*'){
   const{data}=await request(`${table}?${column}=eq.${encodeURIComponent(id)}&archived_at=is.null&select=${encodeURIComponent(select)}&order=created_at.desc`);return data||[];
 }
 export async function save(table,record){
+  if(table==='shipments'&&record.firstShipmentOnly&&!record.id)return insertFirstShipment(record);
   const payload=normalizeWritePayload(record,table);
   if(demoMode){const rows=demo[table]||(demo[table]=[]);const index=rows.findIndex(row=>row.id===payload.id);if(index>=0)rows[index]={...rows[index],...payload,updated_at:new Date().toISOString()};else rows.unshift({...payload,id:payload.id||crypto.randomUUID(),created_at:new Date().toISOString(),updated_at:new Date().toISOString()});return index>=0?rows[index]:rows[0]}
   if(payload.id){const id=payload.id;delete payload.id;const{data}=await request(`${table}?id=eq.${encodeURIComponent(id)}&select=*`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return data?.[0]}
   const{data}=await request(`${table}?select=*`,{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return data?.[0];
 }
 export async function archive(table,id){return save(table,{id,archived_at:new Date().toISOString()})}
+async function insertFirstShipment(record){
+  const id=record.collaboration_id,message='A shipment already exists for this order. Reopen Shipments and edit the existing parcel.';
+  if(!id)throw Error('Missing collaboration.');
+  if((await related('shipments','collaboration_id',id)).length)throw Error(message);
+  const payload=normalizeWritePayload({...record,id},'shipments');
+  if(demoMode){if(demo.shipments.some(s=>s.id===id))throw Error(message);return save('shipments',payload);}
+  try{return (await request('shipments?select=*',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)})).data[0];}
+  catch(error){if(String(error.message).includes('23505'))throw Error(message);throw error;}
+}
 // Compare-and-swap prevents a stale handoff editor from overwriting a teammate.
 export async function saveIfUnchanged(table,before,patch){
   if(demoMode){const latest=await getOne(table,before.id);if(!latest||latest.updated_at!==before.updated_at)throw Error('HANDOFF_CONFLICT');return save(table,{id:before.id,...patch});}
@@ -200,7 +210,7 @@ export async function saveShippingHandoff({collaborationId,shipmentId=null,mode,
     }
   }
   let saved,before,entityType,summary;
-  const insertFirst=async patch=>{const payload=normalizeWritePayload({...patch,id:c.id},'shipments');if(demoMode){if(await getOne('shipments',c.id))throw Error('HANDOFF_CONFLICT');return save('shipments',payload);}const r=await request('shipments?select=*',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});return r.data?.[0];};
+  const insertFirst=patch=>insertFirstShipment({...patch,collaboration_id:c.id});
   if(mode==='outreach-owner'){
     if((values.owner_id||null)===(c.owner_id||null))return{unchanged:true};
     saved=await saveIfUnchanged('collaborations',c,{owner_id:values.owner_id||null});before=c;entityType='collaboration';summary='Outreach owner: '+(values.owner_name||'Unassigned');
