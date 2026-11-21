@@ -118,3 +118,6 @@
 
 /* Keep parcel tracking readable within the collaboration list. */
 #collaborationRows .collaboration-tracking{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}#collaborationRows .tracking-number{display:block;max-width:240px;overflow-wrap:anywhere;white-space:normal;user-select:text}#collaborationRows .tracking-empty{display:block;margin-top:8px}
+
+/* Fixed-column export preview keeps recipient details together. */
+.collaboration-export-dialog{width:min(1400px,96vw);max-width:96vw}.collaboration-export-dialog .table-wrap{max-height:60vh;overflow:auto}.collaboration-export-dialog table{min-width:1050px}.collaboration-export-dialog td{white-space:pre-wrap;vertical-align:top;font-size:12px;min-width:100px}.collaboration-export-dialog td:nth-child(2){overflow-wrap:anywhere;max-width:240px}.collaboration-export-dialog td:nth-child(3),.collaboration-export-dialog td:nth-child(4){min-width:230px}#collaborationRecords .check-col{min-width:36px;width:36px}

@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {collaborationExportMatrix,csvFromMatrix} from '../src/collaboration-export.js';
+const owners=[{id:'one',name:'lixi yao'},{id:'two',name:'zuowei zhang'}];
+const row={id:'private-id',creator_id:'creator',creator_name:'Example',creator_handle:'example',owner_id:'one',notes:'DO NOT EXPORT',created_at:'2026-01-01',creator_shipping_address:{recipient_name:'Fallback',full_address:'Old address'},collaboration_products:[{quantity:2,product:{name:'Necklace'}}],shipments:[{id:'s',created_at:'2026-11-01',status:'Shipped',owner_id:'two',address_snapshot:{recipient_name:'Recipient',phone:'+33 012345',full_address:'Line 1\nPostal code 01234\nFrance'},tracking_number:'000012345'}]};
+const original=JSON.stringify(row),matrix=collaborationExportMatrix([row],owners);
+assert.equal(matrix[0].length,8);assert.equal(matrix[1].length,8);assert.equal(matrix.length,2);
+assert.equal(matrix[1][2],'Recipient\n+33 012345\nLine 1\nPostal code 01234\nFrance');assert.equal(matrix[1][3],'Necklace ×2');assert.equal(matrix[1][4],'lixi yao');assert.equal(matrix[1][5],'zuowei zhang');assert.equal(matrix[1][7],'000012345');
+assert.ok(!JSON.stringify(matrix).includes('private-id'));assert.ok(!JSON.stringify(matrix).includes('DO NOT EXPORT'));assert.equal(JSON.stringify(row),original);
+assert.equal(collaborationExportMatrix([{...row,shipments:[],creator_shipping_address:null}],owners)[1][2],'');
+assert.equal(csvFromMatrix([['=test','+33 01234','a,"b"\nc']]),'\uFEFF"\'=test","\'+33 01234","a,""b""\nc"');
+globalThis.location={search:'?demo=1&size=1000'};globalThis.window={MATCHMATE_CONFIG:{}};
+const api=await import('../src/data.js');const page=await api.collaborationPage({pageSize:3});const ids=page.data.slice(0,2).map(r=>r.id).reverse();
+assert.deepEqual((await api.selectedCollaborationRows([...ids,ids[0]])).map(r=>r.id),ids);
+await assert.rejects(api.selectedCollaborationRows([]),/Select/);await assert.rejects(api.selectedCollaborationRows(['missing']),/no longer available/);
+const app=readFileSync(new URL('../src/app.js',import.meta.url),'utf8'),html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+assert.ok(app.includes('state.collaborationSelection.clear()'));assert.ok(app.includes('control.indeterminate=count>0'));assert.ok(app.includes('selectedCollaborationRows(ids)'));assert.ok(html.includes('collaborationSelectPageCheck'));
+console.log('PASS: exact selected records, dedupe/order, 8 columns, full address/phone, shipment snapshot precedence, blank values, zero mutation, safe CSV, logout clearing and page selection.');
