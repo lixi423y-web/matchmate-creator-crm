@@ -1,3 +1,4 @@
+import{downloadCollaborationCsv}from'./collaboration-export.js?v=20261121-collab-export1';
 import{shippingAddressText}from'./shipping-address.js';
 import{demoDatabase}from'./demo.js?v=20260825-shared-auth1';
 import{instagramHandle,accountKey,creatorSearch,validateInstagramAccount}from'./identity.js';
@@ -248,7 +249,7 @@ export async function count(table,filters={}){
   const q=new URLSearchParams({select:'id',limit:'1',archived_at:'is.null'});Object.entries(filters).forEach(([k,v])=>q.set(k,`eq.${v}`));const result=await request(`${table}?${q}`,{headers:{Prefer:'count=exact'}});return result.count||0;
 }
 export async function collaborationPage(options={}){
-  if(demoMode){let rows=demo.collaborations.map(row=>hydrateCollaboration(row));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,v])=>v!==''&&v!=null).forEach(([key,value])=>{rows=rows.filter(row=>key==='shipping_owner_id'?(value==='__unassigned__'?!latestShipment(row.shipments)?.owner_id:latestShipment(row.shipments)?.owner_id===value):key==='shipping_status'?(value==='Pending'?!['Shipped','Delivered'].includes(latestShipment(row.shipments)?.status):latestShipment(row.shipments)?.status===value):key==='product_id'?row.collaboration_products.some(item=>item.product_id===value):String(row[key]??'')===String(value))});const[field,direction]=sort.split('.');rows.sort((a,b)=>String(a[field]||'').localeCompare(String(b[field]||''))*(direction==='asc'?1:-1));return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
+  if(demoMode){let rows=demo.collaborations.map(row=>hydrateCollaboration(row));if(options.selectedIds)rows=rows.filter(r=>options.selectedIds.includes(r.id));const{page=1,pageSize=50,search='',filters={},sort='updated_at.desc'}=options;if(search){const needle=search.toLowerCase();rows=rows.filter(row=>JSON.stringify(row).toLowerCase().includes(needle))}Object.entries(filters).filter(([,v])=>v!==''&&v!=null).forEach(([key,value])=>{rows=rows.filter(row=>key==='shipping_owner_id'?(value==='__unassigned__'?!latestShipment(row.shipments)?.owner_id:latestShipment(row.shipments)?.owner_id===value):key==='shipping_status'?(value==='Pending'?!['Shipped','Delivered'].includes(latestShipment(row.shipments)?.status):latestShipment(row.shipments)?.status===value):key==='product_id'?row.collaboration_products.some(item=>item.product_id===value):String(row[key]??'')===String(value))});const[field,direction]=sort.split('.');rows.sort((a,b)=>String(a[field]||'').localeCompare(String(b[field]||''))*(direction==='asc'?1:-1));return{data:rows.slice((page-1)*pageSize,page*pageSize),count:rows.length}}
   const {shipping_owner_id='',shipping_status='',...baseFilters}=options.filters||{};
   let shippingQuery='';
   if(shipping_owner_id||shipping_status){
@@ -261,7 +262,8 @@ export async function collaborationPage(options={}){
     if(ids.length)shippingQuery='&id='+(includesMissing?'not.in.':'in.')+'('+[...new Set(ids)].join(',')+')';
   }
   const query=encodeListQuery({...options,filters:baseFilters,searchFields:['collaboration_code','collaboration_name','creator_name','creator_handle','campaign_name','product_names']});
-  const result=await request(`collaboration_directory?${query}${shippingQuery}`,{headers:{Prefer:'count=exact'}});
+  const selectionQuery=options.selectedIds?'&id=in.('+options.selectedIds.join(',')+')':'';
+  const result=await request(`collaboration_directory?${query}${shippingQuery}${selectionQuery}`,{headers:{Prefer:'count=exact'}});
   if(result.data?.length){
     const items=[];
     for(let start=0;start<result.data.length;start+=100){const ids=result.data.slice(start,start+100).map(row=>row.id),page=await request(`collaboration_products?collaboration_id=in.(${ids.join(',')})&archived_at=is.null&select=collaboration_id,product_id,quantity,product:products(id,sku,name,category)&limit=1000`);items.push(...(page.data||[]))}
@@ -553,5 +555,16 @@ export async function exportCreatorResults(options={}){
  const safe=complete.map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,typeof value==='string'&&/^[\s]*[=+@-]/.test(value)?"'"+value:value])));
  exportRows('matchmate-selected-creators-'+ids.length+'.csv',safe);return ids.length;
 }
-export async function exportCollaborationResults(options){return exportPaged('matchmate-collaborations.csv',collaborationPage,options)}
+export async function selectedCollaborationRows(selectedIds){
+ const ids=[...new Set(selectedIds||[])];if(!ids.length)throw Error('Select at least one collaboration.');
+ if(!demoMode&&ids.some(id=>!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id)))throw Error('Invalid collaboration selection. Refresh and reselect.');
+ const rows=[];for(let i=0;i<ids.length;i+=75){const result=await collaborationPage({selectedIds:ids.slice(i,i+75),page:1,pageSize:75});rows.push(...result.data)}
+ const byId=new Map(rows.filter(r=>ids.includes(r.id)&&!r.archived_at).map(r=>[r.id,r]));
+ if(ids.some(id=>!byId.has(id)))throw Error('Some selected collaborations are no longer available. Refresh and reselect; no file was downloaded.');
+ return ids.map(id=>byId.get(id));
+}
+export async function exportCollaborationResults(options={}){
+ const rows=[];for(let page=1;;page++){const result=await collaborationPage({...options,page,pageSize:250});rows.push(...result.data);if(rows.length>=result.count||result.data.length<250)break;}
+ if(rows.length)downloadCollaborationCsv(rows,options.owners||[],'matchmate-collaborations.csv');return rows.length;
+}
 async function exportPaged(filename,loader,options){const pageSize=500,rows=[];for(let page=1;page<=20;page++){const result=await loader({...options,page,pageSize});rows.push(...result.data);if(rows.length>=result.count||result.data.length<pageSize)break}exportRows(filename,rows);return rows.length}
