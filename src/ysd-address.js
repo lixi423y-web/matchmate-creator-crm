@@ -31,14 +31,16 @@ export function parseAddress(raw,provided={}){
  if((out[k]&&norm(out[k])!==norm(v))||(inferred[k]&&norm(inferred[k])!==norm(v))){issues.add(k);return}
  inferred[k]=v;};
  const lines=String(raw||'').split(/[\n;]/).map(x=>x.trim()).filter(Boolean),rest=[];
- for(const l of lines){
+ for(let l of lines){
+   const tail=l.match(/\s+[-–—]\s+(\+?[\d ()-]{9,20})$/);
+   if(tail&&tail[1].replace(/\D/g,'').length>=9){put('phone',tail[1]);l=l.slice(0,tail.index).trim()}
    let handled=false;for(const [k,lab] of Object.entries(fieldLabels)){const m=l.match(new RegExp('^'+lab+'\\s*:\\s*(.+)$','i'));if(m){if(k==='street')rest.push(m[1]);else put(k,m[1]);handled=true;break}}
    if(handled)continue;
    if(/^\+?[\d (][\d().\s-]{6,22}\d$/.test(l)&&l.replace(/\D/g,'').length>=9){put('phone',l);continue}
    rest.push(l);
  }
  const pieces=rest.flatMap(l=>l.split(',')).map(x=>x.trim()).filter(Boolean);
- if(pieces.length&&iso(pieces.at(-1)))put('country',pieces.pop());
+ if(pieces.length&&iso(pieces.at(-1))){const last=pieces.pop();put('country',last);if(/^(England|Scotland|Wales|Northern Ireland)$/i.test(last))put('state',last)}
  else if(pieces.length){const last=pieces.at(-1),suffix=last.match(/^(.*\S)\s+([\p{L}][\p{L} ]*)$/u);if(suffix&&iso(suffix[2])&&suffix[2].length>2){put('country',suffix[2]);pieces[pieces.length-1]=suffix[1];}}
  const residual=[];
  for(let i=0;i<pieces.length;i++){
@@ -47,7 +49,18 @@ export function parseAddress(raw,provided={}){
       put('country',/\d$/.test(na[3])&&/[a-z]/i.test(na[3])?'CA':'US');put('zip',na[3]);put('state',na[2].toUpperCase());
       if(na[1])put('city',na[1]);else if(residual.length>=2&&!/\d/.test(residual.at(-1)))put('city',residual.pop());continue;
    }
+   const uk=part.match(/\b([A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2})$/i);
+   if(uk&&(!iso(out.country||inferred.country)||iso(out.country||inferred.country)==='GB')){
+     put('country','GB');put('zip',uk[1]);const left=part.slice(0,uk.index).trim();
+     const joined=left.match(/^(.+\b(?:road|street|lane|close|drive|terrace|avenue|way|place|crescent|gardens|square|court))\s+([\p{L}][\p{L} .’'-]*)$/iu);
+     if(joined){residual.push(joined[1]);put('city',joined[2])}
+     else if(!left&&i+1<pieces.length&&/^[\p{L}][\p{L} .’'-]*$/u.test(pieces[i+1]))put('city',pieces[++i]);
+     else if(left&&!/\d/.test(left))put('city',left);
+     else if(left)residual.push(left);
+     continue;
+   }
    const c=iso(out.country||inferred.country);
+   if(c==='ES'){const joined=part.match(/^(.+\d\S*)\s+(\d{5})\s+([\p{L}][\p{L} .’'-]*)$/u);if(joined){residual.push(joined[1]);put('zip',joined[2]);put('city',joined[3]);continue}}
    if(c&&!['US','CA'].includes(c)){
      let found=false;
      for(const m of part.matchAll(/(?<![\p{L}\d])(?:[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}|\d{4}\s?[A-Z]{2}|\d{4}-\d{3}|\d{2}-\d{3}|\d{3} \d{2}|\d{4,6})(?![\p{L}\d])/giu)){
@@ -69,7 +82,9 @@ const cache=new Map();
 export async function enrichAddress(r){
  const c=iso(r.country);if(!c||!r.zip)return;
  if(!cache.has(c))cache.set(c,fetch(new URL('./ysd-postal/'+c+'.json',import.meta.url)).then(x=>x.ok?x.json():{}).catch(()=>({})));
- const idx=await cache.get(c),key=String(r.zip).toUpperCase().replace(/[\s-]/g,''),hits=idx[key];if(!hits)return;
+ const idx=await cache.get(c),key=String(r.zip).toUpperCase().replace(/[\s-]/g,''),hits=idx[key];
+ if(!hits&&c==='GB'&&patterns.GB.test(key)){const regions=new Set((idx[key.slice(0,-3)]||[]).map(h=>h[1]).filter(Boolean));if(!r.state&&regions.size===1)r.state=[...regions][0]}
+ if(!hits)return;
  const match=r.city?hits.filter(([city])=>folded(city)===folded(r.city)||(c==='FR'&&folded(city).replace(/ \d{2}$/,'')===folded(r.city))):hits;
  if(!match.length)return;
  const uniq=i=>[...new Set(match.map(h=>h[i]))];if(!r.city&&uniq(0).length===1)r.city=uniq(0)[0];if(!r.state&&uniq(1).length===1)r.state=uniq(1)[0];
