@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {parseAddress,enrichAddress} from '../src/ysd-address.js';
+globalThis.fetch=async url=>({ok:true,json:async()=>JSON.parse(await readFile(url,'utf8'))});
+const a=parseAddress('Test Recipient\n12 Sample Road, Montréal, QC H4C 1S9\n514-555-0123');
+assert.deepEqual([a.city,a.country,a.state,a.zip],['Montréal','CA','QC','H4C 1S9']);
+const b=parseAddress('Test Recipient\nOne Sample Road\nApt 2H\nNY 10065\n2125550123');await enrichAddress(b);
+assert.equal(b.city,'New York');assert.match(b.street,/Apt 2H/);
+const c=parseAddress('Test Recipient\n38 rue Exemple, 13006, Marseille, France\n0612345678');await enrichAddress(c);
+assert.equal(c.city,'Marseille');assert.ok(c.state);
+const ambiguous={country:'IT',zip:'16030'};await enrichAddress(ambiguous);assert.ok(!ambiguous.city);
+assert.ok(parseAddress('Country: France',{country:'US'}).issues.includes('country'));
+console.log('Address extraction, unique and ambiguous postcodes, apartment and source conflicts passed.');
