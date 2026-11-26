@@ -14,7 +14,7 @@ const UI_STATE_KEY='matchmate-crm-ui-location-v1',VALID_VIEWS=['dashboard','crea
 function readUiState(){try{return JSON.parse(sessionStorage.getItem(UI_STATE_KEY)||'{}')}catch{return{}}}
 const initialUi=readUiState();
 const state={view:VALID_VIEWS.includes(initialUi.view)?initialUi.view:'dashboard',creators:[],creatorCount:0,creatorPage:1,creatorPageSize:DEFAULT_PAGE_SIZE,creatorSort:'created_at.desc',creatorFilters:{},creatorSelection:new Set(),creatorImport:{rows:[],existing:[],mode:'skip'},collaborations:[],collaborationCount:0,collaborationPage:1,collaborationPageSize:DEFAULT_PAGE_SIZE,collaborationFilters:{},collaborationSelection:new Set(),refs:{owners:[],campaigns:[],products:[],creatorOptions:[]},drawer:null,drawerTab:'profile',saving:false,actionBusy:false,draft:null,request:{creator:0,collaboration:0,detail:0,drawerRender:0}};
-let toastTimer,appStarted=false,authGeneration=0;
+let toastTimer,appStarted=false,authGeneration=0,exportSelectionSnapshot=[];
 const handoffUI=createShippingHandoffUI({owners:()=>state.refs.owners,openProducts:id=>discardChangesThen(()=>openCollaboration(id,'products')),openShipment:id=>discardChangesThen(()=>openCollaboration(id,'shipments')),afterMutation:()=>refreshViews({dashboard:true,creators:true,collaborations:true}),onError:handleError,notify:toast,isActive:()=>appStarted&&Boolean(currentSession()),remember:rememberUiState,initialMode:initialUi.collaborationMode});
 
 boot();
@@ -39,6 +39,7 @@ async function logout(){const button=$('#logoutBtn');button.disabled=true;showLo
 function showLoginError(text){const error=$('#loginError');error.textContent=text;error.classList.toggle('hidden',!text)}
 function showLogin(error=''){authGeneration++;appStarted=false;clearCrmData();$('#app').classList.add('hidden');$('#authGate').classList.remove('hidden');$('#loginPassword').value='';setPasswordVisibility(false);showLoginError(error)}
 function clearCrmData(){
+ document.querySelector('#bulkOrderDialog')?.close();
   document.querySelector('#ysdPreview')?.close();
   handoffUI.clear();
   state.creators=[];state.creatorCount=0;state.collaborations=[];state.collaborationCount=0;state.creatorSelection.clear();state.collaborationSelection.clear();exportSelectionSnapshot=[];$('#collaborationExportDialog').open&&$('#collaborationExportDialog').close();state.creatorImport={rows:[],existing:[],mode:'skip'};state.refs={owners:[],campaigns:[],products:[],creatorOptions:[]};state.drawer=null;state.draft=null;state.request.creator++;state.request.collaboration++;state.request.detail++;state.request.drawerRender++;
@@ -46,6 +47,7 @@ function clearCrmData(){
   $('#creatorImportDialog').open&&$('#creatorImportDialog').close();$('#bulkDialog').open&&$('#bulkDialog').close();$('#creatorRatingDialog').open&&$('#creatorRatingDialog').close();
 }
 function bindStatic(){
+ $('#bulkOrders').onclick=()=>discardChangesThen(openBulkOrders);
   handoffUI.bind();
   $$('.nav-button').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.view)));
   $$('[data-go]').forEach(button=>button.addEventListener('click',()=>setView(button.dataset.go)));
@@ -57,11 +59,11 @@ function bindStatic(){
   $('#selectPageBtn').addEventListener('click',()=>{state.creators.forEach(row=>state.creatorSelection.add(row.id));renderCreators()});
   $('#clearSelectionBtn').addEventListener('click',()=>{state.creatorSelection.clear();renderCreators()});
   $('#bulkCreatorBtn').addEventListener('click',()=>{if(!state.creatorSelection.size)return toast('Select at least one creator.');$('#bulkDialog').showModal()});
-  $$('[data-creator-sort]').forEach(button=>button.addEventListener('click',()=>setCreatorSort(button.dataset.creatorSort)));updateCreatorSortHeaders();$('#applyBulkBtn').addEventListener('click',applyBulkUpdate);$('#exportCreatorsBtn').addEventListener('click',exportCreators);$('#exportSelectedCreatorsBtn').addEventListener('click',exportSelectedCreators);$('#exportCollaborationsBtn').addEventListener('click',exportCollaborations);
+  $$('[data-creator-sort]').forEach(button=>button.addEventListener('click',()=>setCreatorSort(button.dataset.creatorSort)));updateCreatorSortHeaders();$('#applyBulkBtn').addEventListener('click',applyBulkUpdate);$('#exportCreatorsBtn').addEventListener('click',exportCreators);$('#exportSelectedCreatorsBtn').addEventListener('click',exportSelectedCreators);
   $('#collaborationSelectPage').addEventListener('click',()=>{state.collaborations.forEach(r=>state.collaborationSelection.add(r.id));renderCollaborations()});
   $('#collaborationSelectPageCheck').addEventListener('change',event=>{state.collaborations.forEach(r=>event.target.checked?state.collaborationSelection.add(r.id):state.collaborationSelection.delete(r.id));renderCollaborations()});
   $('#collaborationClearSelection').addEventListener('click',()=>{state.collaborationSelection.clear();renderCollaborations()});
-  $('#exportSelectedCollaborationsBtn').addEventListener('click',previewSelectedCollaborations);
+  $('#exportSelectedCollaborationsBtn').addEventListener('click',()=>state.collaborationSelection.size?previewSelectedCollaborations():exportCollaborations());
   $('#exportYsdBtn').addEventListener('click',async()=>{
     const ids=[...state.collaborationSelection],epoch=authGeneration;if(!ids.length)return;
     const result=await runAction($('#exportYsdBtn'),'Preparing YSD export',async()=>{const [{previewYsd},rows]=await Promise.all([import('./ysd-ui.js'),selectedCollaborationRows(ids)]);if(appStarted&&epoch===authGeneration)previewYsd(rows);},{buttonText:'Preparing…',inlineError:false});renderCollaborationSelection();
@@ -110,7 +112,6 @@ function downloadCreatorTemplate(){const sample=['matchmate_creator','https://ww
 function downloadText(filename,text,type){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 async function exportSelectedCreators(){const ids=[...state.creatorSelection];if(!ids.length)return toast('Select at least one creator.');const result=await runAction($('#exportSelectedCreatorsBtn'),`Exporting ${ids.length} selected creators`,()=>exportCreatorResults({selectedIds:ids}),{buttonText:'Exporting…',inlineError:false});renderSelectionCount();if(result.ok)toast(`Exported ${result.value} selected creators.`)}
 async function exportCreators(){const{search='',...filters}=state.creatorFilters;setStatus('Exporting creators');try{const count=await exportCreatorResults({search,filters,sort:state.creatorSort});toast(`Exported ${count} creators`)}catch(error){handleError(error)}finally{setStatus('Ready')}}
-let exportSelectionSnapshot=[];
 async function previewSelectedCollaborations(){
  const ids=[...state.collaborationSelection];if(!ids.length)return toast('Select at least one collaboration.');
  exportSelectionSnapshot=[];
@@ -123,10 +124,62 @@ async function previewSelectedCollaborations(){
  $('#collaborationExportDialog').showModal();
 }
 function renderCollaborationSelection(){
+ $('#bulkOrders').disabled=!state.collaborationSelection.size;
  $('#exportYsdBtn').disabled=!state.collaborationSelection.size;
  const n=state.collaborationSelection.size,button=$('#exportSelectedCollaborationsBtn'),control=$('#collaborationSelectPageCheck'),count=state.collaborations.filter(r=>state.collaborationSelection.has(r.id)).length;
- button.disabled=!n;button.textContent='Export selected CSV ('+n+')';$('#collaborationSelectionCount').textContent=n+' selected';
+ button.disabled=!(n||state.collaborationCount);button.textContent=n?'Export selected CSV ('+n+')':'Export filtered CSV ('+state.collaborationCount+')';$('#collaborationSelectionCount').textContent=n+' selected';
  control.checked=state.collaborations.length>0&&count===state.collaborations.length;control.indeterminate=count>0&&count<state.collaborations.length;control.disabled=!state.collaborations.length;
+}
+async function openBulkOrders(){
+ const ids=[...state.collaborationSelection],epoch=authGeneration;
+ if(!ids.length)return;
+ const result=await runAction($('#bulkOrders'),'Checking selection',()=>selectedCollaborationRows(ids));
+ if(!result.ok||epoch!==authGeneration||!appStarted)return;
+ const rows=result.value,dialog=document.createElement('dialog');
+ dialog.id='bulkOrderDialog';
+ dialog.innerHTML='<div class="dialog-form"><h2>Bulk update · '+ids.length+' selected</h2><label>Field<select class="field"></select></label><label>New value<select class="value"></select></label><p role="status" style="white-space:pre-line"></p><menu><button class="secondary cancel" type="button">Cancel</button><button class="apply" type="button" disabled>Apply update</button></menu></div>';
+ const field=$('.field',dialog),value=$('.value',dialog),apply=$('.apply',dialog),info=$('[role=status]',dialog);
+ for(const [k,v] of [['stage','Stage'],['outreach-owner','Outreach owner'],['shipping-owner','Shipping owner'],['direct-status','Shipping status']])field.add(new Option(v,k));
+ field.onchange=()=>{value.replaceChildren(new Option('Choose a value',''));const k=field.value;
+   if(k.endsWith('owner')){if(k==='outreach-owner')value.add(new Option('Unassigned','unassigned'));for(const o of state.refs.owners)value.add(new Option(o.name,o.id))}
+   else for(const v of k==='stage'?COLLABORATION_STAGES.filter(v=>v!=='Closed'):['Pending','Shipped','Delivered'])value.add(new Option(v,v));
+   apply.disabled=true;
+ };field.onchange();value.onchange=()=>{apply.disabled=!value.value};
+ $('.cancel',dialog).onclick=()=>dialog.close();dialog.oncancel=e=>{if(state.actionBusy)e.preventDefault()};dialog.onclose=()=>dialog.remove();
+ apply.onclick=async()=>{
+   const k=field.value,v=value.value;if(!v||epoch!==authGeneration||!appStarted)return;
+   const issues=[];let changed=0,unchanged=0;
+   const res=await runAction(apply,'Updating selected orders',async()=>{
+     for(const row of rows){
+       if(epoch!==authGeneration||!appStarted)break;
+       try{
+         const ctx=await shippingHandoffContext(row.id),c=ctx.collaboration,s=ctx.shipment;
+         if(c.updated_at!==row.updated_at)throw Error('Order changed; refresh before retrying.');
+         if(k==='stage'){
+           if(c.stage===v){unchanged++;continue}
+           const saved=await saveIfUnchanged('collaborations',c,{stage:v});changed++;
+           if(await logActivitySafely({entityType:'collaboration',entityId:c.id,creatorId:c.creator_id,collaborationId:c.id,action:'Bulk stage update',before:{stage:c.stage},after:{stage:saved.stage}}))issues.push(row.collaboration_code+': saved; activity log unavailable.');
+         }else{
+           if(k!=='outreach-owner'){
+             const parcels=(row.shipments||[]).filter(p=>!p.archived_at);
+             if(parcels.length!==1||s?.id!==parcels[0].id)throw Error('Open this order to choose or create its parcel.');
+             if(s.status!==parcels[0].status||s.owner_id!==parcels[0].owner_id)throw Error('Parcel changed; refresh before retrying.');
+           }
+           const values=k==='direct-status'?{status:v}:{owner_id:v==='unassigned'?null:v,owner_name:ownerName(v==='unassigned'?null:v)};
+           const outcome=await saveShippingHandoff({collaborationId:c.id,shipmentId:s?.id,mode:k,values,expected:handoffSnapshot(ctx)});
+           if(outcome.unchanged)unchanged++;else changed++;
+           if(outcome.stageWarning||outcome.activityWarning)issues.push(row.collaboration_code+': saved; check stage or activity history.');
+         }
+       }catch(e){issues.push((row.collaboration_code||row.id)+': '+e.message)}
+     }
+   });
+   if(!res.ok||epoch!==authGeneration){dialog.close();return}
+   field.disabled=value.disabled=apply.disabled=true;
+   const summary=changed+' updated · '+unchanged+' unchanged';info.textContent=[summary,...issues].join('\n');
+   $('.cancel',dialog).textContent='Close';await refreshViews({dashboard:true,creators:true,collaborations:true});
+   if(!issues.length){dialog.close();toast(summary)}
+ };
+ document.body.append(dialog);dialog.showModal();
 }
 async function exportCollaborations(){const{search='',...filters}=state.collaborationFilters;setStatus('Exporting collaborations');try{const count=await exportCollaborationResults({search,filters,sort:'updated_at.desc',owners:state.refs.owners});toast(`Exported ${count} collaborations`)}catch(error){handleError(error)}finally{setStatus('Ready')}}
 async function loadDashboard(){try{const counts=await dashboardCounts();renderDashboard(counts)}catch(error){handleError(error)}}
@@ -437,3 +490,5 @@ function bindShipmentAddressTools(){
     if(input)input.addEventListener('input',()=>{status.textContent='';if(expand?.getAttribute('aria-expanded')==='true'){input.style.height='auto';input.style.height=input.scrollHeight+'px'}});
   });
 }
+import {shippingHandoffContext,saveShippingHandoff} from './data.js?v=20261122-ysd1';
+import {handoffSnapshot} from './shipping-handoff.js?v=20261120-simple1';

@@ -92,8 +92,8 @@
             <label>End<input name="end_date" type="date"></label>
             <button class="secondary clear-filters" type="button">Clear</button>
           </div>
-          <div class="table-toolbar"><span id="collaborationCount" class="muted"></span><button id="exportCollaborationsBtn" class="secondary compact" type="button">Export CSV</button></div>
-          <div class="table-toolbar"><div><button id="collaborationSelectPage" class="secondary compact" type="button">Select page</button><button id="collaborationClearSelection" class="secondary compact" type="button">Clear selection</button><span id="collaborationSelectionCount" class="muted">0 selected</span></div><div><button id="exportSelectedCollaborationsBtn" class="secondary compact" type="button" disabled>Export selected CSV (0)</button> <button id="exportYsdBtn" class="secondary compact" type="button" disabled>Export YSD CSV</button></div></div>
+          <div class="table-toolbar"><span id="collaborationCount" class="muted"></span></div>
+          <div class="table-toolbar"><div><button id="collaborationSelectPage" class="secondary compact" type="button">Select page</button><button id="collaborationClearSelection" class="secondary compact" type="button">Clear selection</button><span id="collaborationSelectionCount" class="muted">0 selected</span></div><div><button id="bulkOrders" type="button" class="secondary compact" disabled>Bulk update</button> <button id="exportSelectedCollaborationsBtn" class="secondary compact" type="button" disabled>Export filtered CSV (0)</button> <button id="exportYsdBtn" class="secondary compact" type="button" disabled>Export YSD Excel</button></div></div>
           <div class="table-wrap"><table><thead><tr><th class="check-col"><input id="collaborationSelectPageCheck" type="checkbox" aria-label="Select all collaborations on this page"></th><th>Creator</th><th>Stage</th><th>Products &amp; quantity</th><th>Recipient details</th><th>Outreach owner</th><th>Shipping owner</th><th>Shipping &amp; tracking</th><th>Publication</th></tr></thead><tbody id="collaborationRows"></tbody></table></div>
           <div id="collaborationPagination" class="pagination"></div>
         </section>
@@ -119,6 +119,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./config.js?v=20261014-follower-autofetch1"></script>
   <dialog id="collaborationExportDialog" class="collaboration-export-dialog"><form method="dialog" class="dialog-form"><div class="section-head"><h2>Export selected</h2><button class="icon-button" value="cancel" aria-label="Close export preview">×</button></div><p id="collaborationExportSummary"></p><p class="muted">Only selected collaborations. Full recipient details are kept together in one cell.</p><div id="collaborationExportPreview" class="table-wrap"></div><menu><button class="secondary" value="cancel">Cancel</button><button id="downloadSelectedCollaborationsBtn" type="button">Download selected CSV</button></menu></form></dialog>
-  <script type="module" src="./src/app.js?v=20261122-ysd1"></script>
+  <script type="module" src="./src/app.js?v=20261126-order-tools"></script>
 </body>
 </html>

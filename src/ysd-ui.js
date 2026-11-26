@@ -1,4 +1,4 @@
-import {draft,ysdCsv,quote,parcel} from './ysd.js';
+import {draft,quote,parcel} from './ysd.js';
 import {enrichAddress} from './ysd-address.js';
 export function previewYsd(rows){
  const orders=rows.map(draft), dialog=document.createElement('dialog');
@@ -6,7 +6,7 @@ export function previewYsd(rows){
  const add=(parent,tag,text)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;parent.append(n);return n};
  const input=(parent,label,value,fn)=>{const l=add(parent,'label',label),i=add(l,'input');i.value=value||'';i.oninput=()=>fn(i.value);return i};
  const grid=parent=>{const g=add(parent,'div');g.className='form-grid';return g};
- add(dialog,'h2','Export YSD CSV');
+ add(dialog,'h2','Export YSD Excel');
  const status=add(dialog,'p','Checking '+orders.length+' selected orders…');
  const settings=Object.freeze({weight:'0.2',price:'4'});
  const container=add(dialog,'div'),labels={name:'Recipient',country:'Country',state:'State / province',city:'City',street:'Street and apartment',zip:'Postal code',phone:'Phone'};
@@ -31,10 +31,10 @@ export function previewYsd(rows){
  const attribution=add(about,'a','GeoNames · CC BY 4.0');attribution.href='https://www.geonames.org/';const license=add(about,'a',' License');license.href='https://creativecommons.org/licenses/by/4.0/';
  const error=add(dialog,'p');error.setAttribute('role','alert');
  const cancel=add(dialog,'button','Cancel');cancel.onclick=()=>dialog.close();
- const save=add(dialog,'button','Download YSD CSV');save.onclick=async()=>{
+ const save=add(dialog,'button','Download YSD Excel');save.onclick=async()=>{
    save.disabled=true;
-   try{await Promise.all(orders.map(enrichAddress));if(!dialog.open)return;const csv=ysdCsv(orders,settings);
-     const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=add(dialog,'a');a.href=url;a.download='matchmate-ysd-'+orders.length+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);dialog.close();
+   try{await Promise.all(orders.map(enrichAddress));if(!dialog.open)return;const {ysdExcel}=await import('./ysd-excel.js');const file=ysdExcel(orders,settings);
+     const url=URL.createObjectURL(file),a=add(dialog,'a');a.href=url;a.download='matchmate-ysd-'+orders.length+'.xls';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);dialog.close();
    }catch(e){render();error.textContent=e.message;}finally{save.disabled=false}
  };
  dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
