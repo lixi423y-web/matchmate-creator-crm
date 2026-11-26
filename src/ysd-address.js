@@ -30,7 +30,10 @@ export function parseAddress(raw,provided={}){
  return folded(x)};
  if((out[k]&&norm(out[k])!==norm(v))||(inferred[k]&&norm(inferred[k])!==norm(v))){issues.add(k);return}
  inferred[k]=v;};
- const lines=String(raw||'').split(/[\n;]/).map(x=>x.trim()).filter(Boolean),rest=[];
+ // Split contact clauses without splitting initials, dotted names or street abbreviations.
+ const normalized=String(raw||'').replace(/([\p{L}]{3,})\.\s+/gu,(all,w)=>iso(w)?w+';':all)
+   .replace(/\.\s+(?=\+\d)/g,';').replace(/[,，]\s*(?=\+\d)/g,';');
+ const lines=normalized.split(/[\n;；|]/).map(x=>x.trim()).filter(Boolean),rest=[];
  for(let l of lines){
    const tail=l.match(/\s+[-–—]\s+(\+?[\d ()-]{9,20})$/);
    if(tail&&tail[1].replace(/\D/g,'').length>=9){put('phone',tail[1]);l=l.slice(0,tail.index).trim()}
@@ -39,7 +42,11 @@ export function parseAddress(raw,provided={}){
    if(/^\+?[\d (][\d().\s-]{6,22}\d$/.test(l)&&l.replace(/\D/g,'').length>=9){put('phone',l);continue}
    rest.push(l);
  }
- const pieces=rest.flatMap(l=>l.split(',')).map(x=>x.trim()).filter(Boolean);
+ const pieces=rest.flatMap(l=>l.split(/[,，]/)).map(x=>x.trim()).filter(Boolean);
+ for(let i=pieces.length-1;i>=0;i--){const t=pieces[i];
+   if(t.length>2&&iso(t)){put('country',t);if(/^(England|Scotland|Wales|Northern Ireland)$/i.test(t))put('state',t);pieces.splice(i,1)}
+   else if(/^\+?[\d (][\d(). -]{6,22}\d$/.test(t)&&t.replace(/\D/g,'').length>=9){put('phone',t);pieces.splice(i,1)}
+ }
  if(pieces.length&&iso(pieces.at(-1))){const last=pieces.pop();put('country',last);if(/^(England|Scotland|Wales|Northern Ireland)$/i.test(last))put('state',last)}
  else if(pieces.length){const last=pieces.at(-1),suffix=last.match(/^(.*\S)\s+([\p{L}][\p{L} ]*)$/u);if(suffix&&iso(suffix[2])&&suffix[2].length>2){put('country',suffix[2]);pieces[pieces.length-1]=suffix[1];}}
  const residual=[];
@@ -72,7 +79,9 @@ export function parseAddress(raw,provided={}){
    }
    residual.push(part);
  }
- if(residual.length>=2&&!out.name&&!inferred.name&&/^[\p{L}][\p{L} .'’-]+$/u.test(residual[0])&&residual.slice(1).some(s=>/\d/.test(s)))put('name',residual.shift());
+ const person=t=>/^[\p{L}][\p{L} .'’-]+$/u.test(t)&&!/@|\b(?:calle|rue|via|road|street|lane|terrace|avenue|building|floor|apartment|flat|unit|suite|postal|phone)\b/i.test(t);
+ const candidates=residual.filter(person);
+ if(!out.name&&!inferred.name&&candidates.length===1&&residual.some(s=>/\d/.test(s))&&(residual[0]===candidates[0]||((inferred.city||out.city)&&(inferred.zip||out.zip)&&/[ .’'-]/.test(candidates[0])))){put('name',candidates[0]);residual.splice(residual.indexOf(candidates[0]),1)}
  else if(residual.length&&folded(residual[0])===folded(out.name||inferred.name))residual.shift();
  if(residual.length&&!out.street&&residual.some(v=>/\d|\b(rue|road|street|via|avenue|lane|drive|strasse|straße)\b/i.test(v)))put('street',residual.join(', '));
  for(const [k,v] of Object.entries(inferred))if(!out[k])out[k]=v;

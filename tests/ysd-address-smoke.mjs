@@ -17,3 +17,13 @@ const gb=parseAddress('Sample Person\n18 Example Road London NW10 5SD - 07700900
 assert.deepEqual([gb.name,gb.street,gb.city,gb.country,gb.state,gb.zip,gb.phone],['Sample Person','18 Example Road','London','GB','England','NW10 5SD','07700900123']);
 const gb2=parseAddress('Sample Person\nFlat 1 22 Example Terrace\nSW10 9JP\nLondon\nEngland\n07700900123');await enrichAddress(gb2);
 assert.deepEqual([gb2.street,gb2.city,gb2.state,gb2.country],['Flat 1 22 Example Terrace','London','England','GB']);
+const segments=['Calle Ejemplo 12 p2 46006 Valencia','España','Eva.Prueba','+34 612345678'];
+for(const raw of [
+  segments[0]+', '+segments[1]+'. '+segments[2]+'. '+segments[3],
+  segments.join('\n'),[2,3,1,0].map(i=>segments[i]).join(', '),
+  [3,1,2,0].map(i=>segments[i]).join(' | ')
+]){
+ const r=parseAddress(raw);await enrichAddress(r);
+ assert.deepEqual([r.street,r.country,r.zip,r.city,r.name,r.phone,r.issues],['Calle Ejemplo 12 p2','ES','46006','Valencia','Eva.Prueba','+34 612345678',[]]);
+}
+assert.ok(parseAddress(segments.join('\n')+'\n+34 699999999').issues.includes('phone'));
